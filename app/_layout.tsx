@@ -88,6 +88,9 @@ export default function RootLayout() {
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="oauth/callback" />
+            <Stack.Screen name="event-preview" />
+            <Stack.Screen name="event-editor" />
+            <Stack.Screen name="event-success" />
           </Stack>
           <StatusBar style="auto" />
         </QueryClientProvider>

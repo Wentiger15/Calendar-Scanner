@@ -32,7 +32,7 @@ const env = {
   appSlug: "calendar-scanner",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "",
+  logoUrl: "https://d2xsxph8kpxj0f.cloudfront.net/310519663279033234/ZXXERbqrPGAPPiXbR9YF96/icon-CrgsS2MqMjTvMTjqN23FCy.webp",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,
@@ -86,6 +86,18 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
+    [
+      "expo-calendar",
+      {
+        calendarPermission: "Allow $(PRODUCT_NAME) to access your calendar to add events.",
+      },
+    ],
+    [
+      "expo-camera",
+      {
+        cameraPermission: "Allow $(PRODUCT_NAME) to access your camera to scan schedules.",
+      },
+    ],
     [
       "expo-audio",
       {
