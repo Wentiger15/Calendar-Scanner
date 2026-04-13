@@ -1,9 +1,10 @@
-import { ScrollView, Text, View, Pressable, TextInput, Alert } from "react-native";
+import { ScrollView, Text, View, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native";
 import { useState, useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { Ionicons } from "@expo/vector-icons";
+import { DateTimePickerField } from "@/components/date-time-picker";
 
 interface EventData {
   title: string;
@@ -19,34 +20,36 @@ export default function EventEditorScreen() {
   const colors = useColors();
   const { eventData } = useLocalSearchParams<{ eventData: string }>();
 
-  const [event, setEvent] = useState<EventData | null>(null);
   const [title, setTitle] = useState("");
-  const [startDate, setStartDate] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [endDate, setEndDate] = useState("");
-  const [endTime, setEndTime] = useState("");
+  const [startDateTime, setStartDateTime] = useState(new Date());
+  const [endDateTime, setEndDateTime] = useState(new Date());
+  const [hasEndDate, setHasEndDate] = useState(false);
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
+  const [confidence, setConfidence] = useState(0.8);
 
   useEffect(() => {
     if (eventData) {
       try {
-        const parsed = JSON.parse(eventData);
-        setEvent(parsed);
+        const parsed: EventData = JSON.parse(eventData);
         setTitle(parsed.title || "");
         setLocation(parsed.location || "");
         setDescription(parsed.description || "");
+        setConfidence(parsed.confidence || 0.8);
 
         if (parsed.startDate) {
           const startDt = new Date(parsed.startDate);
-          setStartDate(startDt.toISOString().split("T")[0]);
-          setStartTime(startDt.toTimeString().slice(0, 5));
+          if (!isNaN(startDt.getTime())) {
+            setStartDateTime(startDt);
+          }
         }
 
         if (parsed.endDate) {
           const endDt = new Date(parsed.endDate);
-          setEndDate(endDt.toISOString().split("T")[0]);
-          setEndTime(endDt.toTimeString().slice(0, 5));
+          if (!isNaN(endDt.getTime())) {
+            setEndDateTime(endDt);
+            setHasEndDate(true);
+          }
         }
       } catch (error) {
         console.error("Failed to parse event data:", error);
@@ -56,22 +59,22 @@ export default function EventEditorScreen() {
 
   const handleSave = () => {
     if (!title.trim()) {
-      Alert.alert("Validation Error", "Event title is required");
+      Alert.alert("Missing Title", "Please enter an event title.");
       return;
     }
 
-    if (!startDate) {
-      Alert.alert("Validation Error", "Start date is required");
+    if (hasEndDate && endDateTime <= startDateTime) {
+      Alert.alert("Invalid Time", "End time must be after start time.");
       return;
     }
 
     const updatedEvent: EventData = {
       title: title.trim(),
-      startDate: startDate + (startTime ? `T${startTime}:00` : "T00:00:00"),
-      endDate: endDate ? endDate + (endTime ? `T${endTime}:00` : "T23:59:59") : undefined,
+      startDate: startDateTime.toISOString(),
+      endDate: hasEndDate ? endDateTime.toISOString() : undefined,
       location: location.trim() || undefined,
       description: description.trim() || undefined,
-      confidence: event?.confidence || 0.8,
+      confidence,
     };
 
     router.push({
@@ -82,143 +85,252 @@ export default function EventEditorScreen() {
     });
   };
 
+  const toggleEndDate = () => {
+    if (!hasEndDate) {
+      // Default end time: 1 hour after start
+      const defaultEnd = new Date(startDateTime);
+      defaultEnd.setHours(defaultEnd.getHours() + 1);
+      setEndDateTime(defaultEnd);
+    }
+    setHasEndDate(!hasEndDate);
+  };
+
   return (
     <ScreenContainer className="bg-background">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="flex-1">
-        <View className="gap-6 p-6">
-          {/* Header */}
-          <View className="gap-2">
-            <Text className="text-2xl font-bold text-foreground">Edit Event</Text>
-            <Text className="text-sm text-muted">Modify the event details as needed</Text>
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="flex-1">
+          <View className="gap-5 p-6">
+            {/* Header with back button */}
+            <View className="flex-row items-center gap-3">
+              <Pressable
+                onPress={() => router.back()}
+                style={({ pressed }) => [
+                  {
+                    opacity: pressed ? 0.7 : 1,
+                    padding: 4,
+                  },
+                ]}
+              >
+                <Ionicons name="chevron-back" size={24} color={colors.foreground} />
+              </Pressable>
+              <View className="flex-1">
+                <Text className="text-2xl font-bold text-foreground">Edit Event</Text>
+                <Text className="text-sm text-muted">Modify the event details before adding</Text>
+              </View>
+            </View>
+
+            {/* Form */}
+            <View className="gap-5">
+              {/* Title */}
+              <View className="gap-2">
+                <Text className="text-sm font-semibold text-foreground">Event Title *</Text>
+                <TextInput
+                  value={title}
+                  onChangeText={setTitle}
+                  placeholder="e.g. Team Meeting, Doctor Appointment"
+                  placeholderTextColor={colors.muted}
+                  returnKeyType="done"
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    color: colors.foreground,
+                    fontSize: 16,
+                  }}
+                />
+              </View>
+
+              {/* Start Date */}
+              <DateTimePickerField
+                label="Start Date"
+                value={startDateTime}
+                onChange={(date) => {
+                  setStartDateTime(date);
+                  // Auto-adjust end date if needed
+                  if (hasEndDate && date >= endDateTime) {
+                    const newEnd = new Date(date);
+                    newEnd.setHours(newEnd.getHours() + 1);
+                    setEndDateTime(newEnd);
+                  }
+                }}
+                mode="date"
+                required
+              />
+
+              {/* Start Time */}
+              <DateTimePickerField
+                label="Start Time"
+                value={startDateTime}
+                onChange={(date) => {
+                  const newStart = new Date(startDateTime);
+                  newStart.setHours(date.getHours(), date.getMinutes());
+                  setStartDateTime(newStart);
+                  if (hasEndDate && newStart >= endDateTime) {
+                    const newEnd = new Date(newStart);
+                    newEnd.setHours(newEnd.getHours() + 1);
+                    setEndDateTime(newEnd);
+                  }
+                }}
+                mode="time"
+                required
+              />
+
+              {/* End Date Toggle */}
+              <Pressable
+                onPress={toggleEndDate}
+                style={({ pressed }) => [
+                  {
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 8,
+                    paddingVertical: 8,
+                    opacity: pressed ? 0.7 : 1,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={hasEndDate ? "checkbox" : "square-outline"}
+                  size={22}
+                  color={hasEndDate ? colors.primary : colors.muted}
+                />
+                <Text style={{ color: colors.foreground, fontSize: 15 }}>Set end date & time</Text>
+              </Pressable>
+
+              {/* End Date & Time (conditional) */}
+              {hasEndDate && (
+                <>
+                  <DateTimePickerField
+                    label="End Date"
+                    value={endDateTime}
+                    onChange={(date) => {
+                      const newEnd = new Date(endDateTime);
+                      newEnd.setFullYear(date.getFullYear(), date.getMonth(), date.getDate());
+                      setEndDateTime(newEnd);
+                    }}
+                    mode="date"
+                  />
+                  <DateTimePickerField
+                    label="End Time"
+                    value={endDateTime}
+                    onChange={(date) => {
+                      const newEnd = new Date(endDateTime);
+                      newEnd.setHours(date.getHours(), date.getMinutes());
+                      setEndDateTime(newEnd);
+                    }}
+                    mode="time"
+                  />
+                </>
+              )}
+
+              {/* Location */}
+              <View className="gap-2">
+                <Text className="text-sm font-semibold text-foreground">Location</Text>
+                <View
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    paddingHorizontal: 16,
+                  }}
+                >
+                  <Ionicons name="location-outline" size={18} color={colors.muted} />
+                  <TextInput
+                    value={location}
+                    onChangeText={setLocation}
+                    placeholder="Add a location"
+                    placeholderTextColor={colors.muted}
+                    returnKeyType="done"
+                    style={{
+                      flex: 1,
+                      paddingVertical: 14,
+                      paddingLeft: 10,
+                      color: colors.foreground,
+                      fontSize: 16,
+                    }}
+                  />
+                </View>
+              </View>
+
+              {/* Description */}
+              <View className="gap-2">
+                <Text className="text-sm font-semibold text-foreground">Notes</Text>
+                <TextInput
+                  value={description}
+                  onChangeText={setDescription}
+                  placeholder="Add any notes or details"
+                  placeholderTextColor={colors.muted}
+                  multiline
+                  numberOfLines={4}
+                  style={{
+                    backgroundColor: colors.surface,
+                    borderColor: colors.border,
+                    borderWidth: 1,
+                    borderRadius: 12,
+                    paddingHorizontal: 16,
+                    paddingVertical: 14,
+                    color: colors.foreground,
+                    fontSize: 16,
+                    textAlignVertical: "top",
+                    minHeight: 100,
+                  }}
+                />
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <View className="gap-3 mt-2">
+              <Pressable
+                onPress={handleSave}
+                style={({ pressed }) => [
+                  {
+                    backgroundColor: colors.primary,
+                    opacity: pressed ? 0.9 : 1,
+                    transform: [{ scale: pressed ? 0.97 : 1 }],
+                    borderRadius: 14,
+                    paddingVertical: 16,
+                    paddingHorizontal: 24,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 8,
+                  },
+                ]}
+              >
+                <Ionicons name="calendar" size={20} color="white" />
+                <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
+                  Add to Calendar
+                </Text>
+              </Pressable>
+
+              <Pressable
+                onPress={() => router.back()}
+                style={({ pressed }) => [
+                  {
+                    opacity: pressed ? 0.7 : 1,
+                    borderRadius: 14,
+                    paddingVertical: 14,
+                    paddingHorizontal: 24,
+                    alignItems: "center",
+                  },
+                ]}
+              >
+                <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 16 }}>
+                  Cancel
+                </Text>
+              </Pressable>
+            </View>
           </View>
-
-          {/* Form Fields */}
-          <View className="gap-6">
-            {/* Title */}
-            <View className="gap-2">
-              <Text className="text-sm font-semibold text-foreground">Event Title *</Text>
-              <TextInput
-                value={title}
-                onChangeText={setTitle}
-                placeholder="Enter event title"
-                placeholderTextColor={colors.muted}
-                className="bg-surface border border-border rounded-lg px-4 py-3 text-foreground"
-                style={{ color: colors.foreground }}
-              />
-            </View>
-
-            {/* Start Date */}
-            <View className="gap-2">
-              <Text className="text-sm font-semibold text-foreground">Start Date *</Text>
-              <TextInput
-                value={startDate}
-                onChangeText={setStartDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.muted}
-                className="bg-surface border border-border rounded-lg px-4 py-3 text-foreground"
-                style={{ color: colors.foreground }}
-              />
-            </View>
-
-            {/* Start Time */}
-            <View className="gap-2">
-              <Text className="text-sm font-semibold text-foreground">Start Time</Text>
-              <TextInput
-                value={startTime}
-                onChangeText={setStartTime}
-                placeholder="HH:MM"
-                placeholderTextColor={colors.muted}
-                className="bg-surface border border-border rounded-lg px-4 py-3 text-foreground"
-                style={{ color: colors.foreground }}
-              />
-            </View>
-
-            {/* End Date */}
-            <View className="gap-2">
-              <Text className="text-sm font-semibold text-foreground">End Date (Optional)</Text>
-              <TextInput
-                value={endDate}
-                onChangeText={setEndDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={colors.muted}
-                className="bg-surface border border-border rounded-lg px-4 py-3 text-foreground"
-                style={{ color: colors.foreground }}
-              />
-            </View>
-
-            {/* End Time */}
-            <View className="gap-2">
-              <Text className="text-sm font-semibold text-foreground">End Time (Optional)</Text>
-              <TextInput
-                value={endTime}
-                onChangeText={setEndTime}
-                placeholder="HH:MM"
-                placeholderTextColor={colors.muted}
-                className="bg-surface border border-border rounded-lg px-4 py-3 text-foreground"
-                style={{ color: colors.foreground }}
-              />
-            </View>
-
-            {/* Location */}
-            <View className="gap-2">
-              <Text className="text-sm font-semibold text-foreground">Location (Optional)</Text>
-              <TextInput
-                value={location}
-                onChangeText={setLocation}
-                placeholder="Enter location"
-                placeholderTextColor={colors.muted}
-                className="bg-surface border border-border rounded-lg px-4 py-3 text-foreground"
-                style={{ color: colors.foreground }}
-              />
-            </View>
-
-            {/* Description */}
-            <View className="gap-2">
-              <Text className="text-sm font-semibold text-foreground">Description (Optional)</Text>
-              <TextInput
-                value={description}
-                onChangeText={setDescription}
-                placeholder="Enter description"
-                placeholderTextColor={colors.muted}
-                multiline
-                numberOfLines={4}
-                className="bg-surface border border-border rounded-lg px-4 py-3 text-foreground"
-                style={{ color: colors.foreground, textAlignVertical: "top" }}
-              />
-            </View>
-          </View>
-
-          {/* Action Buttons */}
-          <View className="gap-3 mt-4">
-            <Pressable
-              onPress={handleSave}
-              style={({ pressed }) => [
-                {
-                  backgroundColor: colors.primary,
-                  opacity: pressed ? 0.9 : 1,
-                  transform: [{ scale: pressed ? 0.97 : 1 }],
-                },
-              ]}
-              className="rounded-lg py-4 px-6 items-center flex-row justify-center gap-2"
-            >
-              <Ionicons name="checkmark-circle" size={20} color="white" />
-              <Text className="text-white font-semibold text-base">Save & Add to Calendar</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.back()}
-              style={({ pressed }) => [
-                {
-                  opacity: pressed ? 0.7 : 1,
-                },
-              ]}
-              className="rounded-lg py-3 px-6 items-center"
-            >
-              <Text className="text-muted font-semibold text-base">Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
-      </ScrollView>
+        </ScrollView>
+      </KeyboardAvoidingView>
     </ScreenContainer>
   );
 }

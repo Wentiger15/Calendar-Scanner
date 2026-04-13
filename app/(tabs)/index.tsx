@@ -1,17 +1,19 @@
-import { ScrollView, Text, View, Pressable, ActivityIndicator, Alert } from "react-native";
-import { useState, useEffect } from "react";
+import { ScrollView, Text, View, Pressable, ActivityIndicator, Alert, FlatList } from "react-native";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { Ionicons } from "@expo/vector-icons";
-import { trpc } from "@/lib/trpc";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface RecentEvent {
   id: string;
   title: string;
   startDate: string;
   location?: string;
+  addedAt?: string;
 }
 
 export default function HomeScreen() {
@@ -20,21 +22,18 @@ export default function HomeScreen() {
   const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  const extractEventMutation = trpc.events.extractFromImage.useMutation();
-
-  // Load recent events from AsyncStorage on mount
-  useEffect(() => {
-    loadRecentEvents();
-  }, []);
+  // Reload recent events every time screen comes into focus
+  useFocusEffect(
+    useCallback(() => {
+      loadRecentEvents();
+    }, [])
+  );
 
   const loadRecentEvents = async () => {
     try {
-      const AsyncStorage = await import("@react-native-async-storage/async-storage").then(
-        (m) => m.default
-      );
       const stored = await AsyncStorage.getItem("recentEvents");
       if (stored) {
-        setRecentEvents(JSON.parse(stored).slice(0, 5));
+        setRecentEvents(JSON.parse(stored).slice(0, 10));
       }
     } catch (error) {
       console.error("Failed to load recent events:", error);
@@ -45,14 +44,12 @@ export default function HomeScreen() {
     try {
       setIsLoading(true);
 
-      // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
         Alert.alert("Permission Required", "We need permission to access your photo library.");
         return;
       }
 
-      // Launch image picker
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
@@ -60,11 +57,9 @@ export default function HomeScreen() {
       });
 
       if (!result.canceled && result.assets[0]) {
-        const imageUri = result.assets[0].uri;
-        // Navigate to preview screen with the image
         router.push({
           pathname: "/event-preview",
-          params: { imageUri },
+          params: { imageUri: result.assets[0].uri },
         });
       }
     } catch (error) {
@@ -79,25 +74,21 @@ export default function HomeScreen() {
     try {
       setIsLoading(true);
 
-      // Request camera permissions
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
         Alert.alert("Permission Required", "We need permission to access your camera.");
         return;
       }
 
-      // Launch camera
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: false,
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets[0]) {
-        const imageUri = result.assets[0].uri;
-        // Navigate to preview screen with the image
         router.push({
           pathname: "/event-preview",
-          params: { imageUri },
+          params: { imageUri: result.assets[0].uri },
         });
       }
     } catch (error) {
@@ -108,23 +99,76 @@ export default function HomeScreen() {
     }
   };
 
+  const formatDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      return date.toLocaleDateString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const renderRecentEvent = ({ item }: { item: RecentEvent }) => (
+    <View
+      style={{
+        backgroundColor: colors.surface,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: colors.border,
+        padding: 16,
+        gap: 6,
+      }}
+    >
+      <Text style={{ fontSize: 16, fontWeight: "600", color: colors.foreground }}>
+        {item.title}
+      </Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Ionicons name="time-outline" size={14} color={colors.muted} />
+        <Text style={{ fontSize: 14, color: colors.muted }}>
+          {formatDate(item.startDate)}
+        </Text>
+      </View>
+      {item.location && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Ionicons name="location-outline" size={14} color={colors.muted} />
+          <Text style={{ fontSize: 14, color: colors.muted, flex: 1 }}>
+            {item.location}
+          </Text>
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <ScreenContainer className="bg-background">
       <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="flex-1">
         <View className="flex-1 gap-8 p-6">
           {/* Hero Section */}
-          <View className="items-center gap-3 mt-4">
+          <View className="items-center gap-4 mt-6">
             <View
-              className="w-16 h-16 rounded-full items-center justify-center"
-              style={{ backgroundColor: colors.primary }}
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: 36,
+                backgroundColor: `${colors.primary}15`,
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
-              <Ionicons name="camera" size={32} color="white" />
+              <Ionicons name="scan-outline" size={36} color={colors.primary} />
             </View>
             <Text className="text-3xl font-bold text-foreground text-center">
               Calendar Scanner
             </Text>
-            <Text className="text-base text-muted text-center">
-              Scan images to extract calendar events
+            <Text className="text-base text-muted text-center px-4">
+              Scan any image with schedule info to quickly add events to your calendar
             </Text>
           </View>
 
@@ -138,17 +182,25 @@ export default function HomeScreen() {
                   backgroundColor: colors.primary,
                   opacity: pressed ? 0.9 : 1,
                   transform: [{ scale: pressed ? 0.97 : 1 }],
+                  borderRadius: 16,
+                  paddingVertical: 18,
+                  paddingHorizontal: 24,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 10,
                 },
               ]}
-              className="rounded-2xl py-4 px-6 items-center justify-center"
             >
               {isLoading ? (
                 <ActivityIndicator color="white" />
               ) : (
-                <View className="flex-row items-center gap-3">
-                  <Ionicons name="camera" size={20} color="white" />
-                  <Text className="text-white font-semibold text-base">Take Photo</Text>
-                </View>
+                <>
+                  <Ionicons name="camera" size={22} color="white" />
+                  <Text style={{ color: "white", fontWeight: "600", fontSize: 17 }}>
+                    Take Photo
+                  </Text>
+                </>
               )}
             </Pressable>
 
@@ -158,56 +210,83 @@ export default function HomeScreen() {
               style={({ pressed }) => [
                 {
                   borderColor: colors.primary,
+                  borderWidth: 2,
                   opacity: pressed ? 0.9 : 1,
                   transform: [{ scale: pressed ? 0.97 : 1 }],
+                  borderRadius: 16,
+                  paddingVertical: 16,
+                  paddingHorizontal: 24,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 10,
                 },
               ]}
-              className="rounded-2xl py-4 px-6 items-center justify-center border-2"
             >
               {isLoading ? (
                 <ActivityIndicator color={colors.primary} />
               ) : (
-                <View className="flex-row items-center gap-3">
-                  <Ionicons name="image" size={20} color={colors.primary} />
-                  <Text style={{ color: colors.primary }} className="font-semibold text-base">
+                <>
+                  <Ionicons name="image" size={22} color={colors.primary} />
+                  <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 17 }}>
                     Choose from Library
                   </Text>
-                </View>
+                </>
               )}
             </Pressable>
           </View>
 
-          {/* Recent Events Section */}
+          {/* Tips Section */}
+          <View
+            style={{
+              backgroundColor: `${colors.primary}08`,
+              borderRadius: 14,
+              padding: 16,
+              gap: 10,
+            }}
+          >
+            <Text style={{ fontSize: 14, fontWeight: "600", color: colors.foreground }}>
+              Tips for best results
+            </Text>
+            <View style={{ gap: 6 }}>
+              {[
+                "Make sure dates and times are clearly visible",
+                "Supports formats like 8PM, 3:30 PM, 14:00, etc.",
+                "Works with posters, screenshots, and handwritten notes",
+                "Multiple events can be extracted from one image",
+              ].map((tip, i) => (
+                <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+                  <Ionicons name="checkmark-circle" size={16} color={colors.success} style={{ marginTop: 2 }} />
+                  <Text style={{ fontSize: 13, color: colors.muted, flex: 1, lineHeight: 18 }}>
+                    {tip}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Recent Events */}
           {recentEvents.length > 0 && (
             <View className="gap-3">
-              <Text className="text-lg font-semibold text-foreground">Recent Events</Text>
-              <View className="gap-2">
-                {recentEvents.map((event) => (
-                  <View
-                    key={event.id}
-                    className="bg-surface rounded-xl p-4 border border-border"
-                  >
-                    <Text className="text-base font-semibold text-foreground">
-                      {event.title}
-                    </Text>
-                    <Text className="text-sm text-muted mt-1">
-                      {new Date(event.startDate).toLocaleDateString()}
-                    </Text>
-                    {event.location && (
-                      <Text className="text-sm text-muted mt-1">📍 {event.location}</Text>
-                    )}
-                  </View>
-                ))}
-              </View>
+              <Text style={{ fontSize: 18, fontWeight: "600", color: colors.foreground }}>
+                Recently Added
+              </Text>
+              <FlatList
+                data={recentEvents}
+                renderItem={renderRecentEvent}
+                keyExtractor={(item) => item.id}
+                scrollEnabled={false}
+                ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+              />
             </View>
           )}
 
           {/* Empty State */}
           {recentEvents.length === 0 && (
-            <View className="flex-1 items-center justify-center gap-3">
+            <View className="flex-1 items-center justify-center gap-3 py-8">
               <Ionicons name="calendar-outline" size={48} color={colors.muted} />
               <Text className="text-base text-muted text-center">
-                No events yet. Start by scanning a schedule!
+                No events added yet.{"\n"}Scan an image to get started!
               </Text>
             </View>
           )}

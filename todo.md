@@ -16,6 +16,9 @@
 - [x] Design and implement app logo/icon
 - [x] Add loading indicators and progress feedback
 - [x] Implement error handling and user-friendly error messages
+- [x] Add tips section on home screen
+- [x] Add back navigation buttons on all screens
+- [x] Add reminder info on confirmation screen
 - [ ] Add haptic feedback for button interactions
 - [ ] Implement smooth transitions between screens
 - [ ] Test dark mode appearance
@@ -29,6 +32,7 @@
 
 ## Testing & Quality
 
+- [x] Write comprehensive unit tests (35 tests passing)
 - [ ] Test image scanning with various schedule formats
 - [ ] Test event extraction accuracy
 - [ ] Test calendar integration on iOS device
@@ -40,3 +44,25 @@
 - [ ] Create checkpoint before publishing
 - [ ] Generate APK/IPA for testing
 - [ ] Verify app works on iOS and Android
+
+## Optimization - Round 2
+
+- [x] Optimize AI prompt for better time format recognition (8PM → 20:00, etc.)
+- [x] Support Chinese time formats (下午3點, 上午9時, 晚上8點, etc.)
+- [x] Support multiple date formats (MM/DD, YYYY/MM/DD, 3月15日, etc.)
+- [x] Improve AI prompt to handle various date formats (March 15, 3/15, 15th Mar, etc.)
+- [x] Add native date picker in event editor
+- [x] Add native time picker in event editor
+- [x] Add toggle for end date/time (optional)
+- [x] Add location field with icon
+- [x] Add notes/description field
+- [x] Add form validation (title required, end after start)
+- [x] Improve event preview → edit → confirm flow
+- [x] Support multiple events extraction from single image
+- [x] Add confidence scoring display for extracted events
+- [x] Add Edit and Confirm buttons for each extracted event
+- [x] Improve loading state with better animation
+- [x] Improve error state with retry option
+- [x] Improve recent events list with better formatting
+- [x] Add better validation and error messages for extracted data
+- [ ] Polish UI transitions between screens

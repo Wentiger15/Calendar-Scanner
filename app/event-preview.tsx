@@ -1,4 +1,4 @@
-import { ScrollView, Text, View, Pressable, ActivityIndicator, Alert } from "react-native";
+import { ScrollView, Text, View, Pressable, ActivityIndicator, FlatList } from "react-native";
 import { useState, useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -21,7 +21,7 @@ export default function EventPreviewScreen() {
   const colors = useColors();
   const { imageUri } = useLocalSearchParams<{ imageUri: string }>();
 
-  const [event, setEvent] = useState<ExtractedEvent | null>(null);
+  const [events, setEvents] = useState<ExtractedEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,15 +50,20 @@ export default function EventPreviewScreen() {
       // Create data URL
       const dataUrl = `data:${mimeType};base64,${base64}`;
 
-      // Call API to extract event
+      // Call API to extract events
       const result = await extractEventMutation.mutateAsync({
         imageUrl: dataUrl,
       });
 
-      if (result.success && result.event) {
-        setEvent(result.event);
+      if (result.success) {
+        const extractedEvents = (result as any).events || (result.event ? [result.event] : []);
+        if (extractedEvents.length > 0) {
+          setEvents(extractedEvents);
+        } else {
+          setError("No events could be found in this image. Try a clearer image with visible dates and times.");
+        }
       } else {
-        setError(result.error || "Failed to extract event information");
+        setError((result as any).error || "Failed to extract event information");
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : "Failed to process image";
@@ -69,26 +74,22 @@ export default function EventPreviewScreen() {
     }
   };
 
-  const handleEdit = () => {
-    if (event) {
-      router.push({
-        pathname: "/event-editor",
-        params: {
-          eventData: JSON.stringify(event),
-        },
-      });
-    }
+  const handleEditEvent = (event: ExtractedEvent) => {
+    router.push({
+      pathname: "/event-editor",
+      params: {
+        eventData: JSON.stringify(event),
+      },
+    });
   };
 
-  const handleConfirm = () => {
-    if (event) {
-      router.push({
-        pathname: "/event-success",
-        params: {
-          eventData: JSON.stringify(event),
-        },
-      });
-    }
+  const handleConfirmEvent = (event: ExtractedEvent) => {
+    router.push({
+      pathname: "/event-success",
+      params: {
+        eventData: JSON.stringify(event),
+      },
+    });
   };
 
   const handleRetry = () => {
@@ -97,25 +98,67 @@ export default function EventPreviewScreen() {
     }
   };
 
+  const formatDateTime = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return dateStr;
+      const dateFormatted = date.toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      });
+      const timeFormatted = date.toLocaleTimeString(undefined, {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+      return `${dateFormatted}  ${timeFormatted}`;
+    } catch {
+      return dateStr;
+    }
+  };
+
+  const getConfidenceInfo = (confidence: number) => {
+    const percent = Math.round(confidence * 100);
+    const color = confidence > 0.8 ? colors.success : confidence > 0.6 ? colors.warning : colors.error;
+    const label = confidence > 0.8 ? "High" : confidence > 0.6 ? "Medium" : "Low";
+    return { percent, color, label };
+  };
+
+  // Loading state
   if (isLoading) {
     return (
       <ScreenContainer className="items-center justify-center">
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text className="text-base text-muted mt-4">Extracting event information...</Text>
+        <View className="items-center gap-4">
+          <View
+            style={{ backgroundColor: `${colors.primary}15`, borderRadius: 40, padding: 20 }}
+          >
+            <ActivityIndicator size="large" color={colors.primary} />
+          </View>
+          <Text className="text-lg font-semibold text-foreground">Analyzing Image...</Text>
+          <Text className="text-sm text-muted text-center px-8">
+            Extracting event details including dates, times, and locations
+          </Text>
+        </View>
       </ScreenContainer>
     );
   }
 
+  // Error state
   if (error) {
     return (
       <ScreenContainer className="p-6">
         <View className="flex-1 items-center justify-center gap-6">
-          <Ionicons name="alert-circle" size={48} color={colors.error} />
+          <View
+            style={{ backgroundColor: `${colors.error}15`, borderRadius: 40, padding: 20 }}
+          >
+            <Ionicons name="alert-circle" size={48} color={colors.error} />
+          </View>
           <Text className="text-lg font-semibold text-foreground text-center">
-            Extraction Failed
+            Could Not Extract Events
           </Text>
-          <Text className="text-base text-muted text-center">{error}</Text>
-          <View className="gap-3 w-full">
+          <Text className="text-base text-muted text-center px-4">{error}</Text>
+          <View className="gap-3 w-full mt-4">
             <Pressable
               onPress={handleRetry}
               style={({ pressed }) => [
@@ -123,167 +166,217 @@ export default function EventPreviewScreen() {
                   backgroundColor: colors.primary,
                   opacity: pressed ? 0.9 : 1,
                   transform: [{ scale: pressed ? 0.97 : 1 }],
+                  borderRadius: 14,
+                  paddingVertical: 16,
+                  alignItems: "center",
                 },
               ]}
-              className="rounded-lg py-3 px-6 items-center"
             >
-              <Text className="text-white font-semibold">Try Again</Text>
+              <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>Try Again</Text>
             </Pressable>
-            <Pressable
-              onPress={() => router.back()}
-              style={({ pressed }) => [
-                {
-                  borderColor: colors.primary,
-                  opacity: pressed ? 0.9 : 1,
-                },
-              ]}
-              className="rounded-lg py-3 px-6 items-center border-2"
-            >
-              <Text style={{ color: colors.primary }} className="font-semibold">
-                Go Back
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-      </ScreenContainer>
-    );
-  }
-
-  if (!event) {
-    return (
-      <ScreenContainer className="items-center justify-center">
-        <Text className="text-base text-muted">No event data available</Text>
-      </ScreenContainer>
-    );
-  }
-
-  const confidencePercent = Math.round(event.confidence * 100);
-  const confidenceColor =
-    event.confidence > 0.8 ? colors.success : event.confidence > 0.6 ? colors.warning : colors.error;
-
-  return (
-    <ScreenContainer className="bg-background">
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} className="flex-1">
-        <View className="gap-6 p-6">
-          {/* Header */}
-          <View className="gap-2">
-            <Text className="text-2xl font-bold text-foreground">Event Details</Text>
-            <Text className="text-sm text-muted">Review and confirm the extracted information</Text>
-          </View>
-
-          {/* Event Card */}
-          <View className="bg-surface rounded-2xl p-6 gap-4 border border-border">
-            {/* Title */}
-            <View className="gap-2">
-              <Text className="text-xs font-semibold text-muted uppercase">Event Title</Text>
-              <Text className="text-xl font-bold text-foreground">{event.title}</Text>
-            </View>
-
-            {/* Date and Time */}
-            <View className="gap-2">
-              <Text className="text-xs font-semibold text-muted uppercase">Start Date & Time</Text>
-              <Text className="text-base text-foreground">
-                {new Date(event.startDate).toLocaleString()}
-              </Text>
-            </View>
-
-            {/* End Date (if available) */}
-            {event.endDate && (
-              <View className="gap-2">
-                <Text className="text-xs font-semibold text-muted uppercase">End Date & Time</Text>
-                <Text className="text-base text-foreground">
-                  {new Date(event.endDate).toLocaleString()}
-                </Text>
-              </View>
-            )}
-
-            {/* Location (if available) */}
-            {event.location && (
-              <View className="gap-2">
-                <Text className="text-xs font-semibold text-muted uppercase">Location</Text>
-                <View className="flex-row items-center gap-2">
-                  <Ionicons name="location" size={16} color={colors.muted} />
-                  <Text className="text-base text-foreground flex-1">{event.location}</Text>
-                </View>
-              </View>
-            )}
-
-            {/* Description (if available) */}
-            {event.description && (
-              <View className="gap-2">
-                <Text className="text-xs font-semibold text-muted uppercase">Description</Text>
-                <Text className="text-base text-foreground">{event.description}</Text>
-              </View>
-            )}
-
-            {/* Confidence Score */}
-            <View className="gap-2 pt-4 border-t border-border">
-              <View className="flex-row items-center justify-between">
-                <Text className="text-xs font-semibold text-muted uppercase">Confidence</Text>
-                <Text style={{ color: confidenceColor }} className="text-sm font-semibold">
-                  {confidencePercent}%
-                </Text>
-              </View>
-              <View className="h-2 bg-border rounded-full overflow-hidden">
-                <View
-                  style={{
-                    backgroundColor: confidenceColor,
-                    width: `${confidencePercent}%`,
-                  }}
-                  className="h-full"
-                />
-              </View>
-            </View>
-          </View>
-
-          {/* Action Buttons */}
-          <View className="gap-3">
-            <Pressable
-              onPress={handleConfirm}
-              style={({ pressed }) => [
-                {
-                  backgroundColor: colors.success,
-                  opacity: pressed ? 0.9 : 1,
-                  transform: [{ scale: pressed ? 0.97 : 1 }],
-                },
-              ]}
-              className="rounded-lg py-4 px-6 items-center flex-row justify-center gap-2"
-            >
-              <Ionicons name="checkmark-circle" size={20} color="white" />
-              <Text className="text-white font-semibold text-base">Confirm & Add</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={handleEdit}
-              style={({ pressed }) => [
-                {
-                  borderColor: colors.primary,
-                  opacity: pressed ? 0.9 : 1,
-                  transform: [{ scale: pressed ? 0.97 : 1 }],
-                },
-              ]}
-              className="rounded-lg py-4 px-6 items-center flex-row justify-center gap-2 border-2"
-            >
-              <Ionicons name="pencil" size={20} color={colors.primary} />
-              <Text style={{ color: colors.primary }} className="font-semibold text-base">
-                Edit Details
-              </Text>
-            </Pressable>
-
             <Pressable
               onPress={() => router.back()}
               style={({ pressed }) => [
                 {
                   opacity: pressed ? 0.7 : 1,
+                  borderRadius: 14,
+                  paddingVertical: 14,
+                  alignItems: "center",
                 },
               ]}
-              className="rounded-lg py-3 px-6 items-center"
             >
-              <Text className="text-muted font-semibold text-base">Cancel</Text>
+              <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 16 }}>Go Back</Text>
             </Pressable>
           </View>
         </View>
-      </ScrollView>
+      </ScreenContainer>
+    );
+  }
+
+  // Results
+  return (
+    <ScreenContainer className="bg-background">
+      <View className="flex-1">
+        {/* Header */}
+        <View className="px-6 pt-4 pb-2">
+          <View className="flex-row items-center gap-3">
+            <Pressable
+              onPress={() => router.back()}
+              style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, padding: 4 }]}
+            >
+              <Ionicons name="chevron-back" size={24} color={colors.foreground} />
+            </Pressable>
+            <View className="flex-1">
+              <Text className="text-2xl font-bold text-foreground">
+                {events.length === 1 ? "Event Found" : `${events.length} Events Found`}
+              </Text>
+              <Text className="text-sm text-muted">
+                Tap an event to edit, or confirm to add directly
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Event Cards */}
+        <ScrollView contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24, gap: 16, paddingTop: 8 }}>
+          {events.map((event, index) => {
+            const conf = getConfidenceInfo(event.confidence);
+            return (
+              <View
+                key={`event-${index}`}
+                style={{
+                  backgroundColor: colors.surface,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  overflow: "hidden",
+                }}
+              >
+                {/* Event Header */}
+                <View style={{ padding: 20, gap: 12 }}>
+                  {/* Title Row */}
+                  <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
+                    <Text
+                      style={{
+                        fontSize: 18,
+                        fontWeight: "700",
+                        color: colors.foreground,
+                        flex: 1,
+                        marginRight: 8,
+                      }}
+                    >
+                      {event.title}
+                    </Text>
+                    <View
+                      style={{
+                        backgroundColor: `${conf.color}20`,
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 6,
+                      }}
+                    >
+                      <Text style={{ color: conf.color, fontSize: 12, fontWeight: "600" }}>
+                        {conf.label} {conf.percent}%
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Date & Time */}
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Ionicons name="time-outline" size={16} color={colors.primary} />
+                    <Text style={{ color: colors.foreground, fontSize: 15 }}>
+                      {formatDateTime(event.startDate)}
+                    </Text>
+                  </View>
+
+                  {event.endDate && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Ionicons name="arrow-forward-outline" size={16} color={colors.muted} />
+                      <Text style={{ color: colors.muted, fontSize: 14 }}>
+                        to {formatDateTime(event.endDate)}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Location */}
+                  {event.location && (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <Ionicons name="location-outline" size={16} color={colors.primary} />
+                      <Text style={{ color: colors.foreground, fontSize: 15, flex: 1 }}>
+                        {event.location}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Description */}
+                  {event.description && (
+                    <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 20 }}>
+                      {event.description}
+                    </Text>
+                  )}
+                </View>
+
+                {/* Action Buttons */}
+                <View
+                  style={{
+                    flexDirection: "row",
+                    borderTopWidth: 1,
+                    borderTopColor: colors.border,
+                  }}
+                >
+                  <Pressable
+                    onPress={() => handleEditEvent(event)}
+                    style={({ pressed }) => [
+                      {
+                        flex: 1,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        paddingVertical: 14,
+                        borderRightWidth: 0.5,
+                        borderRightColor: colors.border,
+                        opacity: pressed ? 0.7 : 1,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="pencil-outline" size={16} color={colors.primary} />
+                    <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 15 }}>
+                      Edit
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => handleConfirmEvent(event)}
+                    style={({ pressed }) => [
+                      {
+                        flex: 1,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 6,
+                        paddingVertical: 14,
+                        borderLeftWidth: 0.5,
+                        borderLeftColor: colors.border,
+                        opacity: pressed ? 0.7 : 1,
+                        backgroundColor: pressed ? `${colors.success}10` : "transparent",
+                      },
+                    ]}
+                  >
+                    <Ionicons name="checkmark-circle-outline" size={16} color={colors.success} />
+                    <Text style={{ color: colors.success, fontWeight: "600", fontSize: 15 }}>
+                      Confirm
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+
+          {/* Scan another button */}
+          <Pressable
+            onPress={() => router.back()}
+            style={({ pressed }) => [
+              {
+                borderColor: colors.border,
+                borderWidth: 1,
+                borderRadius: 14,
+                paddingVertical: 14,
+                alignItems: "center",
+                flexDirection: "row",
+                justifyContent: "center",
+                gap: 8,
+                opacity: pressed ? 0.7 : 1,
+                marginTop: 4,
+              },
+            ]}
+          >
+            <Ionicons name="camera-outline" size={18} color={colors.muted} />
+            <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 15 }}>
+              Scan Different Image
+            </Text>
+          </Pressable>
+        </ScrollView>
+      </View>
     </ScreenContainer>
   );
 }

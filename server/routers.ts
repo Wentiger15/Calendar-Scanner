@@ -5,8 +5,59 @@ import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, router } from "./_core/trpc";
 import { invokeLLM } from "./_core/llm";
 
+const EXTRACTION_SYSTEM_PROMPT = `You are an expert calendar event extraction assistant. Your job is to analyze images and extract ALL calendar/schedule event information with high accuracy.
+
+## CRITICAL RULES FOR TIME PARSING:
+- Convert ALL times to 24-hour ISO 8601 format (YYYY-MM-DDTHH:MM:SS)
+- "8PM" or "8 PM" or "8pm" → 20:00:00
+- "8AM" or "8 AM" or "8am" → 08:00:00
+- "12PM" or "noon" → 12:00:00
+- "12AM" or "midnight" → 00:00:00
+- "3:30 PM" → 15:30:00
+- "9:15 AM" → 09:15:00
+- "下午3點" or "下午3时" → 15:00:00
+- "上午9點" or "上午9时" → 09:00:00
+- "晚上8點" → 20:00:00
+- "中午12點" → 12:00:00
+- "14:00" → 14:00:00 (already 24-hour)
+- If only a date is given without time, use T09:00:00 as default start time
+
+## CRITICAL RULES FOR DATE PARSING:
+- Always output dates in YYYY-MM-DD format
+- "March 15" or "Mar 15" or "3/15" → determine year from context (use current year 2026 if not specified)
+- "15th March" or "15 Mar" → same as above
+- "3月15日" or "三月十五" → 2026-03-15
+- "2026/3/15" or "2026.3.15" → 2026-03-15
+- "next Monday" → calculate the actual date
+- "tomorrow" → calculate the actual date
+- Handle both Western (MM/DD) and Asian (YYYY/MM/DD) date formats intelligently based on context
+
+## RULES FOR EVENT EXTRACTION:
+- Extract ALL events found in the image, not just the first one
+- For each event, extract: title, startDate, endDate, location, description
+- If endDate is not specified, estimate based on event type (meetings: +1 hour, all-day: end of day, conferences: check context)
+- If location is visible anywhere in the image, include it
+- Include any additional notes or details in the description field
+- Set confidence based on how clearly the information is presented (0.0 to 1.0)
+
+## OUTPUT FORMAT:
+Return a JSON object with an "events" array. Each event object must have:
+{
+  "events": [
+    {
+      "title": "Event name/title",
+      "startDate": "YYYY-MM-DDTHH:MM:SS",
+      "endDate": "YYYY-MM-DDTHH:MM:SS",
+      "location": "Location if available, or null",
+      "description": "Any additional details, or null",
+      "confidence": 0.95
+    }
+  ]
+}
+
+If no events can be extracted, return: {"events": [], "error": "Description of why extraction failed"}`;
+
 export const appRouter = router({
-  // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
   system: systemRouter,
   auth: router({
     me: publicProcedure.query((opts) => opts.ctx.user),
@@ -21,19 +72,31 @@ export const appRouter = router({
 
   events: router({
     extractFromImage: publicProcedure
-      .input(z.object({ imageUrl: z.string().url() }))
+      .input(z.object({ imageUrl: z.string() }))
       .mutation(async ({ input }) => {
         try {
           const response = await invokeLLM({
             messages: [
               {
                 role: "system",
-                content: "Extract calendar event details from the image. Return JSON with: title, startDate, endDate, location, description, confidence (0-1).",
+                content: EXTRACTION_SYSTEM_PROMPT,
               },
               {
                 role: "user",
                 content: [
-                  { type: "text", text: "Extract all calendar event information from this image." },
+                  {
+                    type: "text",
+                    text: `Analyze this image carefully and extract ALL calendar/schedule event information. Pay special attention to:
+1. Event names/titles
+2. Dates (in any format - convert to ISO 8601)
+3. Times (in any format including AM/PM, 12-hour, 24-hour - convert to 24-hour format)
+4. Locations/venues
+5. Any descriptions or notes
+
+Today's date is ${new Date().toISOString().split("T")[0]} for reference when resolving relative dates.
+
+Return the result as a JSON object with an "events" array.`,
+                  },
                   { type: "image_url", image_url: { url: input.imageUrl, detail: "high" } },
                 ],
               },
@@ -44,18 +107,49 @@ export const appRouter = router({
           const content = response.choices[0].message.content;
           if (!content) throw new Error("No response from LLM");
 
-          const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
+          const contentStr = typeof content === "string" ? content : JSON.stringify(content);
           const parsed = JSON.parse(contentStr);
+
+          // Handle both single event and multiple events response
+          if (parsed.events && Array.isArray(parsed.events)) {
+            // Multiple events extracted
+            const events = parsed.events.map((evt: any) => ({
+              title: evt.title || "Untitled Event",
+              startDate: normalizeDateTime(evt.startDate),
+              endDate: evt.endDate ? normalizeDateTime(evt.endDate) : undefined,
+              location: evt.location || undefined,
+              description: evt.description || undefined,
+              confidence: typeof evt.confidence === "number" ? Math.min(1, Math.max(0, evt.confidence)) : 0.8,
+            }));
+
+            if (events.length === 0) {
+              return {
+                success: false,
+                error: parsed.error || "No events found in the image",
+              };
+            }
+
+            return {
+              success: true,
+              events,
+              event: events[0], // backward compatibility
+            };
+          }
+
+          // Fallback: single event format
+          const event = {
+            title: parsed.title || "Untitled Event",
+            startDate: normalizeDateTime(parsed.startDate),
+            endDate: parsed.endDate ? normalizeDateTime(parsed.endDate) : undefined,
+            location: parsed.location || undefined,
+            description: parsed.description || undefined,
+            confidence: typeof parsed.confidence === "number" ? Math.min(1, Math.max(0, parsed.confidence)) : 0.8,
+          };
+
           return {
             success: true,
-            event: {
-              title: parsed.title || "Untitled Event",
-              startDate: parsed.startDate,
-              endDate: parsed.endDate,
-              location: parsed.location,
-              description: parsed.description,
-              confidence: parsed.confidence || 0.8,
-            },
+            events: [event],
+            event,
           };
         } catch (error) {
           console.error("Event extraction error:", error);
@@ -67,5 +161,35 @@ export const appRouter = router({
       }),
   }),
 });
+
+/**
+ * Normalize various date/time string formats to ISO 8601.
+ * Handles edge cases from LLM output.
+ */
+function normalizeDateTime(dateStr: string | undefined): string {
+  if (!dateStr) return new Date().toISOString();
+
+  // Already valid ISO format
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(dateStr)) {
+    return dateStr;
+  }
+
+  // Date only: YYYY-MM-DD → add default time
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return `${dateStr}T09:00:00`;
+  }
+
+  // Try parsing with Date constructor
+  try {
+    const d = new Date(dateStr);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().replace("Z", "").split(".")[0];
+    }
+  } catch {
+    // Fall through
+  }
+
+  return dateStr;
+}
 
 export type AppRouter = typeof appRouter;
