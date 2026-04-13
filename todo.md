@@ -70,3 +70,4 @@
 ## Bug Fixes
 
 - [x] Fix Uncaught Error: 6000ms timeout exceeded in react-native-gesture-handler deepEqual (Expo Go)
+- [x] Fix expo-file-system readAsStringAsync deprecated error - migrate to expo-file-system/legacy
