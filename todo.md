@@ -66,3 +66,7 @@
 - [x] Improve recent events list with better formatting
 - [x] Add better validation and error messages for extracted data
 - [ ] Polish UI transitions between screens
+
+## Bug Fixes
+
+- [x] Fix Uncaught Error: 6000ms timeout exceeded in react-native-gesture-handler deepEqual (Expo Go)
