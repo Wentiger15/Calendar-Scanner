@@ -1,0 +1,12 @@
+{
+  "buildCommand": "npx expo export --platform web",
+  "outputDirectory": "dist",
+  "installCommand": "pnpm install",
+  "framework": null,
+  "rewrites": [
+    {
+      "source": "/((?!_expo|assets|favicon.ico).*)",
+      "destination": "/index.html"
+    }
+  ]
+}
