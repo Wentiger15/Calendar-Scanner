@@ -73,3 +73,4 @@
 - [x] Fix expo-file-system readAsStringAsync deprecated error - migrate to expo-file-system/legacy
 - [x] Fix react-native-gesture-handler 6000ms timeout on Expo Go (Gestures.js HammerHandlers) - root cause: expo-font timeout in web/iframe, fixed with Font.loadAsync preload
 - [x] Fix Vercel deployment: No Output Directory named 'public' - added vercel.json with Expo web export config
+- [x] Fix Vercel deployment failure: build command failing on Vercel (GitHub check ✗ 0/2) - reverted to Expo official vercel.json config with outputDirectory: dist

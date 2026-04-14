@@ -1,7 +1,8 @@
 {
-  "buildCommand": "npx expo export --platform web --output-dir dist && mv dist public",
-  "outputDirectory": "public",
+  "buildCommand": "npx expo export -p web",
+  "outputDirectory": "dist",
   "installCommand": "pnpm install",
+  "cleanUrls": true,
   "framework": null,
   "rewrites": [
     {
