@@ -1,11 +1,31 @@
-import { ScrollView, Text, View, Pressable, ActivityIndicator, FlatList } from "react-native";
+import { ScrollView, Text, View, Pressable, ActivityIndicator, FlatList, Platform } from "react-native";
 import { useState, useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { Ionicons } from "@expo/vector-icons";
 import { trpc } from "@/lib/trpc";
-import * as FileSystem from "expo-file-system/legacy";
+
+/**
+ * Convert an image URI to a base64 data URL.
+ * Works on both Web (fetch + blob + FileReader) and native (fetch + blob + FileReader).
+ */
+async function uriToBase64DataUrl(uri: string): Promise<string> {
+  const response = await fetch(uri);
+  const blob = await response.blob();
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      if (typeof reader.result === "string") {
+        resolve(reader.result);
+      } else {
+        reject(new Error("Failed to convert image to base64"));
+      }
+    };
+    reader.onerror = () => reject(new Error("Failed to read image file"));
+    reader.readAsDataURL(blob);
+  });
+}
 
 interface ExtractedEvent {
   title: string;
@@ -38,17 +58,8 @@ export default function EventPreviewScreen() {
       setIsLoading(true);
       setError(null);
 
-      // Read image as base64
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: "base64",
-      } as any);
-
-      // Determine MIME type
-      const ext = uri.split(".").pop()?.toLowerCase() || "jpg";
-      const mimeType = ext === "png" ? "image/png" : "image/jpeg";
-
-      // Create data URL
-      const dataUrl = `data:${mimeType};base64,${base64}`;
+      // Convert image URI to base64 data URL (Web-compatible approach)
+      const dataUrl = await uriToBase64DataUrl(uri);
 
       // Call API to extract events
       const result = await extractEventMutation.mutateAsync({

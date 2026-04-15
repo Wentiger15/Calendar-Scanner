@@ -74,3 +74,5 @@
 - [x] Fix react-native-gesture-handler 6000ms timeout on Expo Go (Gestures.js HammerHandlers) - root cause: expo-font timeout in web/iframe, fixed with Font.loadAsync preload
 - [x] Fix Vercel deployment: No Output Directory named 'public' - added vercel.json with Expo web export config
 - [x] Fix Vercel deployment failure: build command failing on Vercel (GitHub check ✗ 0/2) - pre-generate NativeWind CSS cache before expo export to fix SHA-1 error
+- [x] Fix web compatibility: expo-file-system.readAsStringAsync not available on web - replaced with fetch/blob/FileReader approach
+- [x] Ensure image picker and event extraction flow works on Vercel-deployed web version
