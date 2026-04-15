@@ -35,13 +35,25 @@ export function getApiBaseUrl(): string {
     return API_BASE_URL.replace(/\/$/, "");
   }
 
-  // On web, derive from current hostname by replacing port 8081 with 3000
   if (ReactNative.Platform.OS === "web" && typeof window !== "undefined" && window.location) {
     const { protocol, hostname } = window.location;
-    // Pattern: 8081-sandboxid.region.domain -> 3000-sandboxid.region.domain
+
+    // Dev sandbox: 8081-sandboxid.region.domain -> 3000-sandboxid.region.domain
     const apiHostname = hostname.replace(/^8081-/, "3000-");
     if (apiHostname !== hostname) {
       return `${protocol}//${apiHostname}`;
+    }
+
+    // Manus published domain: *.manus.space -> same origin (API server co-located)
+    if (hostname.endsWith(".manus.space")) {
+      return `${protocol}//${hostname}`;
+    }
+
+    // External hosting (e.g. Vercel): look for manus.space published API
+    // The published API server is the canonical backend for external deployments
+    const publishedApiUrl = process.env.EXPO_PUBLIC_PUBLISHED_API_URL;
+    if (publishedApiUrl) {
+      return publishedApiUrl.replace(/\/$/, "");
     }
   }
 
