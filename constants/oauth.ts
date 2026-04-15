@@ -14,6 +14,7 @@ const env = {
   ownerId: process.env.EXPO_PUBLIC_OWNER_OPEN_ID ?? "",
   ownerName: process.env.EXPO_PUBLIC_OWNER_NAME ?? "",
   apiBaseUrl: process.env.EXPO_PUBLIC_API_BASE_URL ?? "",
+  publishedApiUrl: process.env.EXPO_PUBLIC_PUBLISHED_API_URL ?? "",
   deepLinkScheme: schemeFromBundleId,
 };
 
@@ -49,11 +50,10 @@ export function getApiBaseUrl(): string {
       return `${protocol}//${hostname}`;
     }
 
-    // External hosting (e.g. Vercel): look for manus.space published API
-    // The published API server is the canonical backend for external deployments
-    const publishedApiUrl = process.env.EXPO_PUBLIC_PUBLISHED_API_URL;
-    if (publishedApiUrl) {
-      return publishedApiUrl.replace(/\/$/, "");
+    // External hosting (e.g. Vercel): use the Manus-published API server
+    // env.publishedApiUrl is inlined at build time from EXPO_PUBLIC_PUBLISHED_API_URL
+    if (env.publishedApiUrl) {
+      return env.publishedApiUrl.replace(/\/$/, "");
     }
   }
 

@@ -77,3 +77,4 @@
 - [x] Fix web compatibility: expo-file-system.readAsStringAsync not available on web - replaced with fetch/blob/FileReader approach
 - [x] Ensure image picker and event extraction flow works on Vercel-deployed web version
 - [x] Fix web error: "The string did not match the expected pattern" - Vercel static site had no backend; configured getApiBaseUrl() to use Manus published API server
+- [x] Fix: iPhone photo library image extraction still fails on Vercel web - env var not inlined at build time; moved to module-level env object + injected in vercel.json buildCommand

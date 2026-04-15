@@ -1,5 +1,5 @@
 {
-  "buildCommand": "mkdir -p node_modules/react-native-css-interop/.cache && npx tailwindcss -i ./global.css -o ./node_modules/react-native-css-interop/.cache/web.css && npx expo export -p web",
+  "buildCommand": "mkdir -p node_modules/react-native-css-interop/.cache && npx tailwindcss -i ./global.css -o ./node_modules/react-native-css-interop/.cache/web.css && EXPO_PUBLIC_PUBLISHED_API_URL=https://calendarscan-zxxerbqr.manus.space npx expo export -p web",
   "outputDirectory": "dist",
   "installCommand": "pnpm install",
   "cleanUrls": true,
