@@ -1,4 +1,4 @@
-import { ScrollView, Text, View, Pressable, Alert, ActivityIndicator } from "react-native";
+import { ScrollView, Text, View, Pressable, Alert, ActivityIndicator, Platform } from "react-native";
 import { useState, useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -53,69 +53,142 @@ export default function EventSuccessScreen() {
     }
   };
 
+  /**
+   * Generate an .ics file content string for the given event.
+   */
+  const generateIcsContent = (evt: EventData): string => {
+    const startDate = new Date(evt.startDate);
+    let endDate: Date;
+    if (evt.endDate) {
+      endDate = new Date(evt.endDate);
+    } else {
+      endDate = new Date(startDate);
+      endDate.setHours(endDate.getHours() + 1);
+    }
+
+    // Format date to ICS format: YYYYMMDDTHHMMSSZ
+    const toIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+
+    const escapeIcs = (str: string) => str.replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
+
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Calendar Scanner//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+      "BEGIN:VEVENT",
+      `DTSTART:${toIcsDate(startDate)}`,
+      `DTEND:${toIcsDate(endDate)}`,
+      `SUMMARY:${escapeIcs(evt.title)}`,
+    ];
+
+    if (evt.location) {
+      lines.push(`LOCATION:${escapeIcs(evt.location)}`);
+    }
+    if (evt.description) {
+      lines.push(`DESCRIPTION:${escapeIcs(evt.description)}`);
+    }
+
+    // Add alarm (15 min before)
+    lines.push("BEGIN:VALARM");
+    lines.push("TRIGGER:-PT15M");
+    lines.push("ACTION:DISPLAY");
+    lines.push("DESCRIPTION:Reminder");
+    lines.push("END:VALARM");
+
+    lines.push("END:VEVENT");
+    lines.push("END:VCALENDAR");
+
+    return lines.join("\r\n");
+  };
+
+  /**
+   * Web: download .ics file which iOS/macOS will open in Calendar app.
+   */
+  const addToCalendarWeb = (evt: EventData) => {
+    const icsContent = generateIcsContent(evt);
+    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${evt.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_").slice(0, 50)}.ics`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  /**
+   * Native: use expo-calendar to create the event.
+   */
+  const addToCalendarNative = async (evt: EventData) => {
+    const { status } = await Calendar.requestCalendarPermissionsAsync();
+    if (status !== Calendar.PermissionStatus.GRANTED) {
+      Alert.alert(
+        "Permission Required",
+        "Calendar permission is needed to add events. Please enable it in your device settings."
+      );
+      return;
+    }
+
+    let calendarId: string | null = null;
+    try {
+      if (Calendar.getDefaultCalendarAsync) {
+        const defaultCalendar = await Calendar.getDefaultCalendarAsync();
+        if (defaultCalendar?.id) {
+          calendarId = defaultCalendar.id;
+        }
+      }
+    } catch {
+      // getDefaultCalendarAsync may not be available on all platforms
+    }
+
+    if (!calendarId) {
+      const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+      const writableCalendars = calendars.filter((cal) => cal.allowsModifications);
+      if (writableCalendars.length === 0) {
+        Alert.alert("Error", "No writable calendars found on this device.");
+        return;
+      }
+      calendarId = writableCalendars[0].id;
+    }
+
+    const startDate = new Date(evt.startDate);
+    let endDate: Date;
+    if (evt.endDate) {
+      endDate = new Date(evt.endDate);
+    } else {
+      endDate = new Date(startDate);
+      endDate.setHours(endDate.getHours() + 1);
+    }
+
+    const eventDetails: any = {
+      title: evt.title,
+      startDate,
+      endDate,
+      location: evt.location,
+      notes: evt.description,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+      alarms: [{ relativeOffset: -15 }],
+    };
+
+    await Calendar.createEventAsync(calendarId, eventDetails);
+  };
+
   const addEventToCalendar = async () => {
     if (!event) return;
 
     try {
       setIsAdding(true);
 
-      // Request calendar permissions
-      const { status } = await Calendar.requestCalendarPermissionsAsync();
-      if (status !== Calendar.PermissionStatus.GRANTED) {
-        Alert.alert(
-          "Permission Required",
-          "Calendar permission is needed to add events. Please enable it in your device settings."
-        );
-        return;
-      }
-
-      // Get default calendar
-      let calendarId: string | null = null;
-
-      try {
-        if (Calendar.getDefaultCalendarAsync) {
-          const defaultCalendar = await Calendar.getDefaultCalendarAsync();
-          if (defaultCalendar?.id) {
-            calendarId = defaultCalendar.id;
-          }
-        }
-      } catch {
-        // getDefaultCalendarAsync may not be available on all platforms
-      }
-
-      // Fallback: get first writable calendar
-      if (!calendarId) {
-        const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-        const writableCalendars = calendars.filter((cal) => cal.allowsModifications);
-        if (writableCalendars.length === 0) {
-          Alert.alert("Error", "No writable calendars found on this device.");
-          return;
-        }
-        calendarId = writableCalendars[0].id;
-      }
-
-      // Build event details
-      const startDate = new Date(event.startDate);
-      let endDate: Date;
-      if (event.endDate) {
-        endDate = new Date(event.endDate);
+      if (Platform.OS === "web") {
+        // Web: download .ics file
+        addToCalendarWeb(event);
       } else {
-        // Default: 1 hour after start
-        endDate = new Date(startDate);
-        endDate.setHours(endDate.getHours() + 1);
+        // Native: use expo-calendar
+        await addToCalendarNative(event);
       }
-
-      const eventDetails: any = {
-        title: event.title,
-        startDate,
-        endDate,
-        location: event.location,
-        notes: event.description,
-        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-        alarms: [{ relativeOffset: -15 }],
-      };
-
-      const eventId = await Calendar.createEventAsync(calendarId, eventDetails);
 
       // Save to recent events
       try {
@@ -123,7 +196,7 @@ export default function EventSuccessScreen() {
           (await AsyncStorage.getItem("recentEvents")) || "[]"
         );
         const newEvent = {
-          id: eventId,
+          id: Date.now().toString(),
           title: event.title,
           startDate: event.startDate,
           location: event.location,
