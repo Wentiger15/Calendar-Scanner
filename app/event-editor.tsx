@@ -1,10 +1,12 @@
-import { ScrollView, Text, View, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform } from "react-native";
+import { ScrollView, Text, View, Pressable, TextInput, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from "react-native";
 import { useState, useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { Ionicons } from "@expo/vector-icons";
 import { DateTimePickerField } from "@/components/date-time-picker";
+import * as Calendar from "expo-calendar";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface EventData {
   title: string;
@@ -27,6 +29,8 @@ export default function EventEditorScreen() {
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
   const [confidence, setConfidence] = useState(0.8);
+  const [isAdding, setIsAdding] = useState(false);
+  const [isAdded, setIsAdded] = useState(false);
 
   useEffect(() => {
     if (eventData) {
@@ -57,7 +61,35 @@ export default function EventEditorScreen() {
     }
   }, [eventData]);
 
-  const handleSave = () => {
+  /**
+   * Generate .ics content for web calendar download.
+   */
+  const generateIcsContent = (evt: EventData): string => {
+    const start = new Date(evt.startDate);
+    let end: Date;
+    if (evt.endDate) {
+      end = new Date(evt.endDate);
+    } else {
+      end = new Date(start);
+      end.setHours(end.getHours() + 1);
+    }
+    const toIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const escapeIcs = (str: string) => str.replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
+    const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@calendarscanner`;
+    const lines = [
+      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Calendar Scanner//EN",
+      "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT",
+      `UID:${uid}`, `DTSTART:${toIcsDate(start)}`, `DTEND:${toIcsDate(end)}`,
+      `SUMMARY:${escapeIcs(evt.title)}`,
+    ];
+    if (evt.location) lines.push(`LOCATION:${escapeIcs(evt.location)}`);
+    if (evt.description) lines.push(`DESCRIPTION:${escapeIcs(evt.description)}`);
+    lines.push("BEGIN:VALARM", "TRIGGER:-PT15M", "ACTION:DISPLAY", "DESCRIPTION:Reminder", "END:VALARM");
+    lines.push("END:VEVENT", "END:VCALENDAR");
+    return lines.join("\r\n");
+  };
+
+  const handleSave = async () => {
     if (!title.trim()) {
       Alert.alert("Missing Title", "Please enter an event title.");
       return;
@@ -77,12 +109,92 @@ export default function EventEditorScreen() {
       confidence,
     };
 
-    router.push({
-      pathname: "/event-success",
-      params: {
-        eventData: JSON.stringify(updatedEvent),
-      },
-    });
+    setIsAdding(true);
+    try {
+      if (Platform.OS === "web") {
+        // Web: generate .ics and trigger download via data URI (iOS Safari compatible)
+        const icsContent = generateIcsContent(updatedEvent);
+        const dataUri = "data:text/calendar;charset=utf-8," + encodeURIComponent(icsContent);
+        const newWindow = window.open(dataUri, "_blank");
+        if (!newWindow) {
+          try {
+            const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "event.ics";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } catch {
+            window.location.href = dataUri;
+          }
+        }
+      } else {
+        // Native: use expo-calendar
+        const { status } = await Calendar.requestCalendarPermissionsAsync();
+        if (status !== Calendar.PermissionStatus.GRANTED) {
+          Alert.alert("Permission Required", "Calendar permission is needed.");
+          setIsAdding(false);
+          return;
+        }
+        let calendarId: string | null = null;
+        try {
+          if (Calendar.getDefaultCalendarAsync) {
+            const defaultCal = await Calendar.getDefaultCalendarAsync();
+            if (defaultCal?.id) calendarId = defaultCal.id;
+          }
+        } catch {}
+        if (!calendarId) {
+          const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
+          const writable = calendars.filter((c) => c.allowsModifications);
+          if (writable.length === 0) {
+            Alert.alert("Error", "No writable calendars found.");
+            setIsAdding(false);
+            return;
+          }
+          calendarId = writable[0].id;
+        }
+        const start = new Date(updatedEvent.startDate);
+        let end: Date;
+        if (updatedEvent.endDate) {
+          end = new Date(updatedEvent.endDate);
+        } else {
+          end = new Date(start);
+          end.setHours(end.getHours() + 1);
+        }
+        await Calendar.createEventAsync(calendarId, {
+          title: updatedEvent.title,
+          startDate: start,
+          endDate: end,
+          location: updatedEvent.location,
+          notes: updatedEvent.description,
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+          alarms: [{ relativeOffset: -15 }],
+        });
+      }
+
+      // Save to recent events
+      try {
+        const recent = JSON.parse((await AsyncStorage.getItem("recentEvents")) || "[]");
+        recent.unshift({
+          id: Date.now().toString(),
+          title: updatedEvent.title,
+          startDate: updatedEvent.startDate,
+          location: updatedEvent.location,
+          addedAt: new Date().toISOString(),
+        });
+        await AsyncStorage.setItem("recentEvents", JSON.stringify(recent.slice(0, 20)));
+      } catch {}
+
+      setIsAdded(true);
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Failed to add event";
+      Alert.alert("Error", errorMsg);
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   const toggleEndDate = () => {
@@ -288,45 +400,111 @@ export default function EventEditorScreen() {
 
             {/* Action Buttons */}
             <View className="gap-3 mt-2">
-              <Pressable
-                onPress={handleSave}
-                style={({ pressed }) => [
-                  {
-                    backgroundColor: colors.primary,
-                    opacity: pressed ? 0.9 : 1,
-                    transform: [{ scale: pressed ? 0.97 : 1 }],
-                    borderRadius: 14,
-                    paddingVertical: 16,
-                    paddingHorizontal: 24,
-                    flexDirection: "row",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                  },
-                ]}
-              >
-                <Ionicons name="calendar" size={20} color="white" />
-                <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
-                  Add to Calendar
-                </Text>
-              </Pressable>
+              {isAdded ? (
+                <>
+                  <View
+                    style={{
+                      backgroundColor: colors.success,
+                      borderRadius: 14,
+                      paddingVertical: 16,
+                      paddingHorizontal: 24,
+                      flexDirection: "row",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 8,
+                    }}
+                  >
+                    <Ionicons name="checkmark-circle" size={20} color="white" />
+                    <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
+                      {Platform.OS === "web" ? ".ics Downloaded" : "Added to Calendar"}
+                    </Text>
+                  </View>
+                  <Pressable
+                    onPress={() => router.push("/")}
+                    style={({ pressed }) => [
+                      {
+                        backgroundColor: colors.primary,
+                        opacity: pressed ? 0.9 : 1,
+                        borderRadius: 14,
+                        paddingVertical: 14,
+                        paddingHorizontal: 24,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                      },
+                    ]}
+                  >
+                    <Ionicons name="camera-outline" size={18} color="white" />
+                    <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
+                      Scan Another Image
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => router.push("/")}
+                    style={({ pressed }) => [
+                      {
+                        opacity: pressed ? 0.7 : 1,
+                        borderRadius: 14,
+                        paddingVertical: 12,
+                        alignItems: "center",
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 16 }}>Back to Home</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Pressable
+                    onPress={handleSave}
+                    disabled={isAdding}
+                    style={({ pressed }) => [
+                      {
+                        backgroundColor: colors.success,
+                        opacity: (pressed || isAdding) ? 0.9 : 1,
+                        transform: [{ scale: pressed ? 0.97 : 1 }],
+                        borderRadius: 14,
+                        paddingVertical: 16,
+                        paddingHorizontal: 24,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: 8,
+                      },
+                    ]}
+                  >
+                    {isAdding ? (
+                      <ActivityIndicator color="white" />
+                    ) : (
+                      <>
+                        <Ionicons name="calendar" size={20} color="white" />
+                        <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
+                          Add to Calendar
+                        </Text>
+                      </>
+                    )}
+                  </Pressable>
 
-              <Pressable
-                onPress={() => router.back()}
-                style={({ pressed }) => [
-                  {
-                    opacity: pressed ? 0.7 : 1,
-                    borderRadius: 14,
-                    paddingVertical: 14,
-                    paddingHorizontal: 24,
-                    alignItems: "center",
-                  },
-                ]}
-              >
-                <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 16 }}>
-                  Cancel
-                </Text>
-              </Pressable>
+                  <Pressable
+                    onPress={() => router.back()}
+                    disabled={isAdding}
+                    style={({ pressed }) => [
+                      {
+                        opacity: (pressed || isAdding) ? 0.5 : 1,
+                        borderRadius: 14,
+                        paddingVertical: 14,
+                        paddingHorizontal: 24,
+                        alignItems: "center",
+                      },
+                    ]}
+                  >
+                    <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 16 }}>
+                      Cancel
+                    </Text>
+                  </Pressable>
+                </>
+              )}
             </View>
           </View>
         </ScrollView>

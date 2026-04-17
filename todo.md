@@ -81,3 +81,6 @@
 - [x] Fix: "Add to Calendar" button does nothing on Web - implemented .ics file download for web platform, keeps expo-calendar for native
 - [x] Generate custom app icon for Calendar Scanner and update all icon locations
 - [x] Ensure web favicon and PWA icon display correctly when added to iPhone home screen - added +html.tsx with apple-touch-icon, apple-mobile-web-app meta tags
+- [x] Optimize: Add to Calendar button flow and display UX improvements (loading state, success feedback, better layout)
+- [x] Fix: Add to Calendar button not responding on Web version - replaced link.click() with data URI + window.open() for iOS Safari compatibility
+- [x] Feature: Support multi-time-slot events - group same-title events, per-slot Add buttons, Add All button, multi-event .ics generation

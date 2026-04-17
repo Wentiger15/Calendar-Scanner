@@ -1,4 +1,4 @@
-import { ScrollView, Text, View, Pressable, Alert, ActivityIndicator, Platform } from "react-native";
+import { ScrollView, Text, View, Pressable, ActivityIndicator, Alert, Platform } from "react-native";
 import { useState, useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
@@ -44,6 +44,7 @@ export default function EventSuccessScreen() {
         year: "numeric",
         month: "short",
         day: "numeric",
+        weekday: "short",
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
@@ -68,8 +69,8 @@ export default function EventSuccessScreen() {
 
     // Format date to ICS format: YYYYMMDDTHHMMSSZ
     const toIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-
     const escapeIcs = (str: string) => str.replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
+    const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@calendarscanner`;
 
     const lines = [
       "BEGIN:VCALENDAR",
@@ -78,6 +79,7 @@ export default function EventSuccessScreen() {
       "CALSCALE:GREGORIAN",
       "METHOD:PUBLISH",
       "BEGIN:VEVENT",
+      `UID:${uid}`,
       `DTSTART:${toIcsDate(startDate)}`,
       `DTEND:${toIcsDate(endDate)}`,
       `SUMMARY:${escapeIcs(evt.title)}`,
@@ -104,19 +106,33 @@ export default function EventSuccessScreen() {
   };
 
   /**
-   * Web: download .ics file which iOS/macOS will open in Calendar app.
+   * Web: download .ics file using data URI + window.open() for iOS Safari compatibility.
+   * Falls back to link.click() for desktop browsers, then window.location.href as last resort.
    */
   const addToCalendarWeb = (evt: EventData) => {
     const icsContent = generateIcsContent(evt);
-    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `${evt.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_").slice(0, 50)}.ics`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const dataUri = "data:text/calendar;charset=utf-8," + encodeURIComponent(icsContent);
+
+    // iOS Safari: window.open with data URI works reliably
+    const newWindow = window.open(dataUri, "_blank");
+
+    // Fallback: if popup was blocked, try the link approach
+    if (!newWindow) {
+      try {
+        const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${evt.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_").slice(0, 50)}.ics`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch {
+        // Last resort: direct navigation
+        window.location.href = dataUri;
+      }
+    }
   };
 
   /**
@@ -259,54 +275,43 @@ export default function EventSuccessScreen() {
               <Text className="text-2xl font-bold text-foreground text-center">
                 Added to Calendar!
               </Text>
-              <Text className="text-base text-muted text-center">
-                The event has been successfully added to your calendar
+              <Text className="text-base text-muted text-center px-4">
+                {Platform.OS === "web"
+                  ? `The .ics file for "${event.title}" has been downloaded. Open it to add to your calendar.`
+                  : `"${event.title}" has been added to your calendar with a 15-minute reminder.`}
               </Text>
             </View>
 
-            {/* Event Summary Card */}
+            {/* Event Summary */}
             <View
               style={{
                 backgroundColor: colors.surface,
                 borderRadius: 16,
                 borderWidth: 1,
-                borderColor: colors.border,
-                padding: 20,
+                borderColor: colors.success,
+                padding: 16,
                 width: "100%",
-                gap: 12,
+                gap: 8,
               }}
             >
-              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground }}>
+              <Text style={{ fontSize: 16, fontWeight: "600", color: colors.foreground }}>
                 {event.title}
               </Text>
-
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Ionicons name="time-outline" size={16} color={colors.primary} />
-                <Text style={{ color: colors.foreground, fontSize: 15 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <Ionicons name="time-outline" size={14} color={colors.primary} />
+                <Text style={{ color: colors.muted, fontSize: 14 }}>
                   {formatDateTime(event.startDate)}
                 </Text>
               </View>
-
-              {event.endDate && (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Ionicons name="arrow-forward-outline" size={16} color={colors.muted} />
-                  <Text style={{ color: colors.muted, fontSize: 14 }}>
-                    to {formatDateTime(event.endDate)}
-                  </Text>
-                </View>
-              )}
-
               {event.location && (
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Ionicons name="location-outline" size={16} color={colors.primary} />
-                  <Text style={{ color: colors.foreground, fontSize: 15, flex: 1 }}>
-                    {event.location}
-                  </Text>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                  <Ionicons name="location-outline" size={14} color={colors.primary} />
+                  <Text style={{ color: colors.muted, fontSize: 14 }}>{event.location}</Text>
                 </View>
               )}
             </View>
 
-            {/* Actions */}
+            {/* Action Buttons */}
             <View className="gap-3 w-full mt-4">
               <Pressable
                 onPress={() => router.push("/")}
