@@ -107,4 +107,4 @@
 
 ## Optimization - Round 7
 
-- [ ] Fix: Add to Apple Calendar button does not actually add events to Apple Calendar - need working .ics delivery method
+- [x] Fix: Add to Apple Calendar - replaced data URI with server-hosted /api/calendar/event.ics endpoint, uses window.location.href for iOS Safari, added Chinese UI and iOS tip
