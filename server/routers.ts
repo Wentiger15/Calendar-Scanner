@@ -40,6 +40,16 @@ const EXTRACTION_SYSTEM_PROMPT = `You are an expert calendar event extraction as
 - Include any additional notes or details in the description field
 - Set confidence based on how clearly the information is presented (0.0 to 1.0)
 
+## CRITICAL: MULTI-TIME-SLOT EVENTS
+- If ONE event/activity has MULTIPLE time slots (e.g., "Session 1: Apr 22 3:00-4:00 PM, Session 2: Apr 23 10:30-11:30 AM"), you MUST create a SEPARATE event entry for EACH time slot
+- Each time slot entry should have the SAME title, location, and description, but DIFFERENT startDate and endDate
+- This is very common for seminars, workshops, training sessions, and lectures that repeat on different dates/times
+- Examples of multi-time-slot patterns:
+  - "4月22日下午3:00-4:00 / 4月23日上午10:30-11:30" → 2 separate events
+  - "Day 1: March 15 9AM-5PM, Day 2: March 16 9AM-3PM" → 2 separate events
+  - "Every Tuesday and Thursday 2-3PM" → create entries for the next occurrence of each
+- NEVER combine multiple time slots into a single event entry
+
 ## OUTPUT FORMAT:
 Return a JSON object with an "events" array. Each event object must have:
 {
@@ -92,10 +102,11 @@ export const appRouter = router({
 3. Times (in any format including AM/PM, 12-hour, 24-hour - convert to 24-hour format)
 4. Locations/venues
 5. Any descriptions or notes
+6. IMPORTANT: If one event has MULTIPLE time slots or sessions on different dates/times, create a SEPARATE entry for EACH time slot with the same title but different dates/times.
 
-Today's date is ${new Date().toISOString().split("T")[0]} for reference when resolving relative dates.
+Today's date is ${new Date().toISOString().split("T")[0]} for reference when resolving relative dates. Current year is 2026 if not specified.
 
-Return the result as a JSON object with an "events" array.`,
+Return the result as a JSON object with an "events" array. Each time slot must be a separate event entry.`,
                   },
                   { type: "image_url", image_url: { url: input.imageUrl, detail: "high" } },
                 ],

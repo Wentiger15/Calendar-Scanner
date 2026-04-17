@@ -84,3 +84,9 @@
 - [x] Optimize: Add to Calendar button flow and display UX improvements (loading state, success feedback, better layout)
 - [x] Fix: Add to Calendar button not responding on Web version - replaced link.click() with data URI + window.open() for iOS Safari compatibility
 - [x] Feature: Support multi-time-slot events - group same-title events, per-slot Add buttons, Add All button, multi-event .ics generation
+
+## Optimization - Round 4
+
+- [x] Fix: iOS .ics preview UX confusion - added modal instruction guide after .ics download explaining to tap "加至日曆" not the checkmark
+- [x] Fix: Native calendar silently failing - replaced createEventAsync with createEventInCalendarAsync which opens system calendar UI for user confirmation
+- [x] Fix: Multi-time-slot events not extracted separately - added CRITICAL MULTI-TIME-SLOT section to AI prompt with Chinese date examples and explicit instructions

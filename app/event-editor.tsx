@@ -112,50 +112,25 @@ export default function EventEditorScreen() {
     setIsAdding(true);
     try {
       if (Platform.OS === "web") {
-        // Web: generate .ics and trigger download via data URI (iOS Safari compatible)
+        // Web: generate .ics and download via Blob + link
         const icsContent = generateIcsContent(updatedEvent);
-        const dataUri = "data:text/calendar;charset=utf-8," + encodeURIComponent(icsContent);
-        const newWindow = window.open(dataUri, "_blank");
-        if (!newWindow) {
-          try {
-            const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = "event.ics";
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            setTimeout(() => URL.revokeObjectURL(url), 1000);
-          } catch {
-            window.location.href = dataUri;
-          }
+        const safeName = updatedEvent.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_").slice(0, 50);
+        try {
+          const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          link.href = url;
+          link.download = `${safeName}.ics`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          setTimeout(() => URL.revokeObjectURL(url), 1000);
+        } catch {
+          const dataUri = "data:text/calendar;charset=utf-8," + encodeURIComponent(icsContent);
+          window.location.href = dataUri;
         }
       } else {
-        // Native: use expo-calendar
-        const { status } = await Calendar.requestCalendarPermissionsAsync();
-        if (status !== Calendar.PermissionStatus.GRANTED) {
-          Alert.alert("Permission Required", "Calendar permission is needed.");
-          setIsAdding(false);
-          return;
-        }
-        let calendarId: string | null = null;
-        try {
-          if (Calendar.getDefaultCalendarAsync) {
-            const defaultCal = await Calendar.getDefaultCalendarAsync();
-            if (defaultCal?.id) calendarId = defaultCal.id;
-          }
-        } catch {}
-        if (!calendarId) {
-          const calendars = await Calendar.getCalendarsAsync(Calendar.EntityTypes.EVENT);
-          const writable = calendars.filter((c) => c.allowsModifications);
-          if (writable.length === 0) {
-            Alert.alert("Error", "No writable calendars found.");
-            setIsAdding(false);
-            return;
-          }
-          calendarId = writable[0].id;
-        }
+        // Native: use createEventInCalendarAsync to open system calendar UI
         const start = new Date(updatedEvent.startDate);
         let end: Date;
         if (updatedEvent.endDate) {
@@ -164,15 +139,24 @@ export default function EventEditorScreen() {
           end = new Date(start);
           end.setHours(end.getHours() + 1);
         }
-        await Calendar.createEventAsync(calendarId, {
-          title: updatedEvent.title,
-          startDate: start,
-          endDate: end,
-          location: updatedEvent.location,
-          notes: updatedEvent.description,
-          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-          alarms: [{ relativeOffset: -15 }],
-        });
+        const result = await Calendar.createEventInCalendarAsync(
+          {
+            title: updatedEvent.title,
+            startDate: start,
+            endDate: end,
+            location: updatedEvent.location,
+            notes: updatedEvent.description,
+            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+            alarms: [{ relativeOffset: -15 }],
+          },
+          { startNewActivityTask: true }
+        );
+        // Check if user actually saved the event
+        if (result.action !== "saved" && result.action !== "done") {
+          // User canceled
+          setIsAdding(false);
+          return;
+        }
       }
 
       // Save to recent events
