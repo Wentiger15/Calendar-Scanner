@@ -70,18 +70,21 @@ async function startServer() {
       return;
     }
 
-    const startDate = new Date(start as string);
-    let endDate: Date;
-    if (end) {
-      endDate = new Date(end as string);
-    } else {
-      endDate = new Date(startDate);
-      endDate.setHours(endDate.getHours() + 1);
-    }
-
-    const toIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    // Convert date string to ICS local time format (no Z suffix = floating time = user's local timezone)
+    const toIcsLocal = (dateStr: string) => dateStr.replace(/[-:]/g, "").replace(/\.\d{3}.*$/, "");
     const escapeIcs = (str: string) => str.replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
     const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@calendarscanner`;
+
+    const startIcs = toIcsLocal(start as string);
+    let endIcs: string;
+    if (end) {
+      endIcs = toIcsLocal(end as string);
+    } else {
+      const d = new Date(start as string);
+      d.setHours(d.getHours() + 1);
+      const pad = (n: number) => String(n).padStart(2, "0");
+      endIcs = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    }
 
     const lines = [
       "BEGIN:VCALENDAR",
@@ -91,8 +94,8 @@ async function startServer() {
       "METHOD:PUBLISH",
       "BEGIN:VEVENT",
       `UID:${uid}`,
-      `DTSTART:${toIcsDate(startDate)}`,
-      `DTEND:${toIcsDate(endDate)}`,
+      `DTSTART:${startIcs}`,
+      `DTEND:${endIcs}`,
       `SUMMARY:${escapeIcs(title as string)}`,
     ];
 

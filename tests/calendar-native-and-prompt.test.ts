@@ -81,35 +81,33 @@ describe("Pages use CalendarAddSheet instead of .ics download", () => {
 describe("AI prompt includes multi-time-slot extraction rules", () => {
   it("server/routers.ts should have MULTI-TIME-SLOT section in prompt", () => {
     const content = fs.readFileSync("server/routers.ts", "utf-8");
-    expect(content).toContain("MULTI-TIME-SLOT EVENTS");
-    expect(content).toContain("SEPARATE event entry for EACH");
+    expect(content).toContain("MULTI-TIME-SLOT");
+    expect(content).toContain("SEPARATE entry for EACH");
     expect(content).toContain("NEVER combine multiple time slots");
   });
 
   it("prompt should instruct about multi-language support", () => {
     const content = fs.readFileSync("server/routers.ts", "utf-8");
-    expect(content).toContain("Chinese (Traditional & Simplified)");
-    expect(content).toContain("Ignore any decorative elements");
+    expect(content).toContain("Traditional Chinese");
+    expect(content).toContain("Ignore decorative elements");
   });
 
   it("prompt should include Chinese date/time examples for multi-slot", () => {
     const content = fs.readFileSync("server/routers.ts", "utf-8");
-    // The prompt has specific Chinese examples
     expect(content).toContain("講解會");
-    expect(content).toContain("2026-04-22T15:00:00");
-    expect(content).toContain("2026-04-23T10:30:00");
+    expect(content).toContain("4月22日");
+    expect(content).toContain("4月23日");
   });
 
   it("user message should emphasize multi-time-slot extraction", () => {
     const content = fs.readFileSync("server/routers.ts", "utf-8");
-    expect(content).toContain("MOST IMPORTANT");
-    expect(content).toContain("SEPARATE entry for EACH time slot");
+    expect(content).toContain("Each time slot = separate event entry");
   });
 
   it("prompt should instruct to never use Untitled Event", () => {
     const content = fs.readFileSync("server/routers.ts", "utf-8");
-    expect(content).toContain("never 'Untitled Event'");
-    expect(content).toContain("use the actual name from the image");
+    expect(content).toContain("NEVER use \"Untitled Event\"");
+    expect(content).toContain("actual event name from the image");
   });
 });
 

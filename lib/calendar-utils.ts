@@ -12,31 +12,41 @@ export interface CalendarEvent {
 }
 
 /**
- * Format a Date to Google Calendar's required format: YYYYMMDDTHHmmssZ
+ * Format a date string (YYYY-MM-DDTHH:MM:SS) to Google Calendar format (YYYYMMDDTHHmmss).
+ * The AI returns local times without timezone, so we keep them as-is (no Z suffix).
+ * Google Calendar will interpret them in the user's timezone when ctz is set.
  */
-function toGoogleCalDate(d: Date): string {
-  return d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+function toGoogleCalDateLocal(dateStr: string): string {
+  // Strip non-numeric except T
+  return dateStr.replace(/[-:]/g, "").replace(/\.\d{3}.*$/, "");
 }
 
 /**
  * Build a Google Calendar "create event" URL.
- * Opens in the browser and lets the user save directly.
+ * Uses local time format + ctz parameter so the event appears at the correct local time.
  */
 export function buildGoogleCalendarUrl(evt: CalendarEvent): string {
-  const startDate = new Date(evt.startDate);
-  let endDate: Date;
+  const startStr = evt.startDate;
+  let endStr: string;
   if (evt.endDate) {
-    endDate = new Date(evt.endDate);
+    endStr = evt.endDate;
   } else {
-    endDate = new Date(startDate);
-    endDate.setHours(endDate.getHours() + 1);
+    // Default +1 hour
+    const d = new Date(startStr);
+    d.setHours(d.getHours() + 1);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    endStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
   }
 
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: evt.title,
-    dates: `${toGoogleCalDate(startDate)}/${toGoogleCalDate(endDate)}`,
+    dates: `${toGoogleCalDateLocal(startStr)}/${toGoogleCalDateLocal(endStr)}`,
   });
+
+  // Set user's timezone so Google interprets the local times correctly
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  if (tz) params.set("ctz", tz);
 
   if (evt.location) params.set("location", evt.location);
   if (evt.description) params.set("details", evt.description);
@@ -67,18 +77,20 @@ export function buildAppleCalendarUrl(evt: CalendarEvent): string {
  * Generate .ics content for local use (tests, etc.)
  */
 export function generateIcsContent(evt: CalendarEvent): string {
-  const startDate = new Date(evt.startDate);
-  let endDate: Date;
-  if (evt.endDate) {
-    endDate = new Date(evt.endDate);
-  } else {
-    endDate = new Date(startDate);
-    endDate.setHours(endDate.getHours() + 1);
-  }
-
-  const toIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const toIcsDateLocal = (dateStr: string) => dateStr.replace(/[-:]/g, "").replace(/\.\d{3}.*$/, "");
   const escapeIcs = (str: string) => str.replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
   const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@calendarscanner`;
+
+  const startIcs = toIcsDateLocal(evt.startDate);
+  let endIcs: string;
+  if (evt.endDate) {
+    endIcs = toIcsDateLocal(evt.endDate);
+  } else {
+    const d = new Date(evt.startDate);
+    d.setHours(d.getHours() + 1);
+    const pad = (n: number) => String(n).padStart(2, "0");
+    endIcs = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  }
 
   const lines = [
     "BEGIN:VCALENDAR",
@@ -88,8 +100,8 @@ export function generateIcsContent(evt: CalendarEvent): string {
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
     `UID:${uid}`,
-    `DTSTART:${toIcsDate(startDate)}`,
-    `DTEND:${toIcsDate(endDate)}`,
+    `DTSTART:${startIcs}`,
+    `DTEND:${endIcs}`,
     `SUMMARY:${escapeIcs(evt.title)}`,
   ];
 
@@ -114,25 +126,27 @@ export function generateMultiIcsContent(events: CalendarEvent[]): string {
     "METHOD:PUBLISH",
   ];
 
+  const toIcsDateLocal = (dateStr: string) => dateStr.replace(/[-:]/g, "").replace(/\.\d{3}.*$/, "");
+  const escapeIcs = (str: string) => str.replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
+  const pad = (n: number) => String(n).padStart(2, "0");
+
   for (let idx = 0; idx < events.length; idx++) {
     const evt = events[idx];
-    const startDate = new Date(evt.startDate);
-    let endDate: Date;
-    if (evt.endDate) {
-      endDate = new Date(evt.endDate);
-    } else {
-      endDate = new Date(startDate);
-      endDate.setHours(endDate.getHours() + 1);
-    }
-
-    const toIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-    const escapeIcs = (str: string) => str.replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
     const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}-${idx}@calendarscanner`;
+    const startIcs = toIcsDateLocal(evt.startDate);
+    let endIcs: string;
+    if (evt.endDate) {
+      endIcs = toIcsDateLocal(evt.endDate);
+    } else {
+      const d = new Date(evt.startDate);
+      d.setHours(d.getHours() + 1);
+      endIcs = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+    }
 
     lines.push("BEGIN:VEVENT");
     lines.push(`UID:${uid}`);
-    lines.push(`DTSTART:${toIcsDate(startDate)}`);
-    lines.push(`DTEND:${toIcsDate(endDate)}`);
+    lines.push(`DTSTART:${startIcs}`);
+    lines.push(`DTEND:${endIcs}`);
     lines.push(`SUMMARY:${escapeIcs(evt.title)}`);
     if (evt.location) lines.push(`LOCATION:${escapeIcs(evt.location)}`);
     if (evt.description) lines.push(`DESCRIPTION:${escapeIcs(evt.description)}`);

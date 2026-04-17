@@ -113,3 +113,10 @@
 
 - [x] Feature: Calendar preference memory - AsyncStorage saves user choice, auto-selects next time with "更換日曆應用" option
 - [x] UI: Converted all English text to Chinese across all pages (home, event-preview, event-editor, event-success, calendar-add-sheet, tab bar)
+
+## Optimization - Round 9
+
+- [x] Fix: Page freezes when scrolling to bottom - replaced ScrollView+FlatList nesting with single FlatList
+- [x] Feature: Add delete option for history records - swipe-to-delete with animated gesture
+- [x] Optimize: Improve fluency/smoothness - StyleSheet.create, memoized callbacks, pure FlatList layout
+- [x] Optimize: Improve AI accuracy - refined prompt, fixed timezone (local time for Google/Apple Calendar)
