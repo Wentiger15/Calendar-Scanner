@@ -46,7 +46,7 @@ export default function HomeScreen() {
 
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission Required", "We need permission to access your photo library.");
+        Alert.alert("需要權限", "我們需要存取你的相簿來選擇圖片。");
         return;
       }
 
@@ -63,7 +63,7 @@ export default function HomeScreen() {
         });
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to pick image. Please try again.");
+      Alert.alert("錯誤", "選擇圖片失敗，請重試。");
       console.error("Image picker error:", error);
     } finally {
       setIsLoading(false);
@@ -76,7 +76,7 @@ export default function HomeScreen() {
 
       const { status } = await ImagePicker.requestCameraPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("Permission Required", "We need permission to access your camera.");
+        Alert.alert("需要權限", "我們需要存取你的相機來拍照。");
         return;
       }
 
@@ -92,7 +92,7 @@ export default function HomeScreen() {
         });
       }
     } catch (error) {
-      Alert.alert("Error", "Failed to take photo. Please try again.");
+      Alert.alert("錯誤", "拍照失敗，請重試。");
       console.error("Camera error:", error);
     } finally {
       setIsLoading(false);
@@ -103,8 +103,8 @@ export default function HomeScreen() {
     try {
       const date = new Date(dateStr);
       if (isNaN(date.getTime())) return dateStr;
-      return date.toLocaleDateString(undefined, {
-        month: "short",
+      return date.toLocaleDateString("zh-TW", {
+        month: "long",
         day: "numeric",
         hour: "2-digit",
         minute: "2-digit",
@@ -165,10 +165,10 @@ export default function HomeScreen() {
               <Ionicons name="scan-outline" size={36} color={colors.primary} />
             </View>
             <Text className="text-3xl font-bold text-foreground text-center">
-              Calendar Scanner
+              日程掃描器
             </Text>
             <Text className="text-base text-muted text-center px-4">
-              Scan any image with schedule info to quickly add events to your calendar
+              掃描含有日程資訊的圖片，快速添加活動到你的日曆
             </Text>
           </View>
 
@@ -198,7 +198,7 @@ export default function HomeScreen() {
                 <>
                   <Ionicons name="camera" size={22} color="white" />
                   <Text style={{ color: "white", fontWeight: "600", fontSize: 17 }}>
-                    Take Photo
+                    拍照掃描
                   </Text>
                 </>
               )}
@@ -229,7 +229,7 @@ export default function HomeScreen() {
                 <>
                   <Ionicons name="image" size={22} color={colors.primary} />
                   <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 17 }}>
-                    Choose from Library
+                    從相簿選擇
                   </Text>
                 </>
               )}
@@ -246,14 +246,14 @@ export default function HomeScreen() {
             }}
           >
             <Text style={{ fontSize: 14, fontWeight: "600", color: colors.foreground }}>
-              Tips for best results
+              使用小提示
             </Text>
             <View style={{ gap: 6 }}>
               {[
-                "Make sure dates and times are clearly visible",
-                "Supports formats like 8PM, 3:30 PM, 14:00, etc.",
-                "Works with posters, screenshots, and handwritten notes",
-                "Multiple events can be extracted from one image",
+                "確保圖片中的日期和時間清晰可見",
+                "支援多種格式：下午3點、3:30 PM、14:00 等",
+                "適用於海報、截圖、手寫筆記等",
+                "一張圖片可以識別多個活動",
               ].map((tip, i) => (
                 <View key={i} style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
                   <Ionicons name="checkmark-circle" size={16} color={colors.success} style={{ marginTop: 2 }} />
@@ -269,7 +269,7 @@ export default function HomeScreen() {
           {recentEvents.length > 0 && (
             <View className="gap-3">
               <Text style={{ fontSize: 18, fontWeight: "600", color: colors.foreground }}>
-                Recently Added
+                最近添加
               </Text>
               <FlatList
                 data={recentEvents}
@@ -286,7 +286,7 @@ export default function HomeScreen() {
             <View className="flex-1 items-center justify-center gap-3 py-8">
               <Ionicons name="calendar-outline" size={48} color={colors.muted} />
               <Text className="text-base text-muted text-center">
-                No events added yet.{"\n"}Scan an image to get started!
+                尚未添加任何活動{"\n"}掃描一張圖片開始使用！
               </Text>
             </View>
           )}

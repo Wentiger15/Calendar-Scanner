@@ -87,7 +87,7 @@ export default function EventSuccessScreen() {
       }
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Failed to add event";
-      Alert.alert("Error", errorMsg);
+      Alert.alert("錯誤", errorMsg);
       console.error("Calendar error:", error);
     } finally {
       setIsAdding(false);
@@ -113,7 +113,7 @@ export default function EventSuccessScreen() {
   if (!event) {
     return (
       <ScreenContainer className="items-center justify-center">
-        <Text className="text-base text-muted">No event data available</Text>
+        <Text className="text-base text-muted">沒有活動資料</Text>
       </ScreenContainer>
     );
   }
@@ -140,10 +140,10 @@ export default function EventSuccessScreen() {
 
             <View className="gap-2 items-center">
               <Text className="text-2xl font-bold text-foreground text-center">
-                Added to Calendar!
+                已添加至日曆！
               </Text>
               <Text className="text-base text-muted text-center px-4">
-                The event has been successfully added to your calendar
+                活動已成功添加到你的日曆
               </Text>
             </View>
 
@@ -172,7 +172,7 @@ export default function EventSuccessScreen() {
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <Ionicons name="arrow-forward-outline" size={14} color={colors.muted} />
                   <Text style={{ color: colors.muted, fontSize: 14 }}>
-                    to {formatDateTime(event.endDate)}
+                    至 {formatDateTime(event.endDate)}
                   </Text>
                 </View>
               )}
@@ -204,7 +204,7 @@ export default function EventSuccessScreen() {
               >
                 <Ionicons name="camera-outline" size={20} color="white" />
                 <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
-                  Scan Another Image
+                  掃描其他圖片
                 </Text>
               </Pressable>
 
@@ -220,7 +220,7 @@ export default function EventSuccessScreen() {
                 ]}
               >
                 <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 16 }}>
-                  Back to Home
+                  返回首頁
                 </Text>
               </Pressable>
             </View>
@@ -244,8 +244,8 @@ export default function EventSuccessScreen() {
               <Ionicons name="chevron-back" size={24} color={colors.foreground} />
             </Pressable>
             <View className="flex-1">
-              <Text className="text-2xl font-bold text-foreground">Confirm Event</Text>
-              <Text className="text-sm text-muted">Review before adding to calendar</Text>
+              <Text className="text-2xl font-bold text-foreground">確認活動</Text>
+              <Text className="text-sm text-muted">添加到日曆前確認詳情</Text>
             </View>
           </View>
 
@@ -262,7 +262,7 @@ export default function EventSuccessScreen() {
           >
             <View className="gap-1">
               <Text style={{ fontSize: 12, fontWeight: "600", color: colors.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                Event
+                活動
               </Text>
               <Text style={{ fontSize: 20, fontWeight: "700", color: colors.foreground }}>
                 {event.title}
@@ -271,7 +271,7 @@ export default function EventSuccessScreen() {
 
             <View className="gap-1">
               <Text style={{ fontSize: 12, fontWeight: "600", color: colors.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                Start
+                開始
               </Text>
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                 <Ionicons name="time-outline" size={18} color={colors.primary} />
@@ -284,7 +284,7 @@ export default function EventSuccessScreen() {
             {event.endDate && (
               <View className="gap-1">
                 <Text style={{ fontSize: 12, fontWeight: "600", color: colors.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  End
+                  結束
                 </Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <Ionicons name="time-outline" size={18} color={colors.muted} />
@@ -298,7 +298,7 @@ export default function EventSuccessScreen() {
             {event.location && (
               <View className="gap-1">
                 <Text style={{ fontSize: 12, fontWeight: "600", color: colors.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  Location
+                  地點
                 </Text>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                   <Ionicons name="location-outline" size={18} color={colors.primary} />
@@ -312,7 +312,7 @@ export default function EventSuccessScreen() {
             {event.description && (
               <View className="gap-1">
                 <Text style={{ fontSize: 12, fontWeight: "600", color: colors.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>
-                  Notes
+                  備註
                 </Text>
                 <Text style={{ fontSize: 15, color: colors.foreground, lineHeight: 22 }}>
                   {event.description}
@@ -332,7 +332,7 @@ export default function EventSuccessScreen() {
             >
               <Ionicons name="notifications-outline" size={16} color={colors.muted} />
               <Text style={{ color: colors.muted, fontSize: 13 }}>
-                A reminder will be set 15 minutes before
+                將在活動前 15 分鐘提醒
               </Text>
             </View>
           </View>
@@ -362,7 +362,7 @@ export default function EventSuccessScreen() {
                 <>
                   <Ionicons name="calendar" size={20} color="white" />
                   <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
-                    Add to Calendar
+                    加至日曆
                   </Text>
                 </>
               )}
@@ -387,7 +387,7 @@ export default function EventSuccessScreen() {
             >
               <Ionicons name="pencil-outline" size={18} color={colors.primary} />
               <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 16 }}>
-                Edit Details
+                編輯詳情
               </Text>
             </Pressable>
 
@@ -403,7 +403,7 @@ export default function EventSuccessScreen() {
                 },
               ]}
             >
-              <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 15 }}>Cancel</Text>
+              <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 15 }}>取消</Text>
             </Pressable>
           </View>
         </View>

@@ -108,3 +108,8 @@
 ## Optimization - Round 7
 
 - [x] Fix: Add to Apple Calendar - replaced data URI with server-hosted /api/calendar/event.ics endpoint, uses window.location.href for iOS Safari, added Chinese UI and iOS tip
+
+## Optimization - Round 8
+
+- [ ] Feature: Calendar preference memory - save user's calendar choice (Google/Apple) in AsyncStorage, auto-select next time
+- [ ] UI: Convert all English UI text to Chinese across all pages (home, event-preview, event-editor, event-success, calendar-add-sheet)

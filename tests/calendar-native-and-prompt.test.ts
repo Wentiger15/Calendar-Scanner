@@ -121,8 +121,8 @@ describe("Event preview supports multi-time-slot grouping", () => {
 
   it("event-preview.tsx should render multi-slot UI with per-slot buttons", () => {
     const content = fs.readFileSync("app/event-preview.tsx", "utf-8");
-    expect(content).toContain("Time Slots");
-    expect(content).toContain("Add All");
+    expect(content).toContain("時段");
+    expect(content).toContain("全部添加");
     expect(content).toContain("isMultiSlot");
   });
 });

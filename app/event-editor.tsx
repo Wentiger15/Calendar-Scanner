@@ -74,12 +74,12 @@ export default function EventEditorScreen() {
 
   const handleSave = async () => {
     if (!title.trim()) {
-      Alert.alert("Missing Title", "Please enter an event title.");
+      Alert.alert("缺少標題", "請輸入活動標題。");
       return;
     }
 
     if (hasEndDate && endDateTime <= startDateTime) {
-      Alert.alert("Invalid Time", "End time must be after start time.");
+      Alert.alert("時間無效", "結束時間必須在開始時間之後。");
       return;
     }
 
@@ -106,7 +106,7 @@ export default function EventEditorScreen() {
       setIsAdded(true);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Failed to add event";
-      Alert.alert("Error", errorMsg);
+      Alert.alert("錯誤", errorMsg);
     } finally {
       setIsAdding(false);
     }
@@ -164,8 +164,8 @@ export default function EventEditorScreen() {
                 <Ionicons name="chevron-back" size={24} color={colors.foreground} />
               </Pressable>
               <View className="flex-1">
-                <Text className="text-2xl font-bold text-foreground">Edit Event</Text>
-                <Text className="text-sm text-muted">Modify the event details before adding</Text>
+                <Text className="text-2xl font-bold text-foreground">編輯活動</Text>
+                <Text className="text-sm text-muted">添加前修改活動詳情</Text>
               </View>
             </View>
 
@@ -173,11 +173,11 @@ export default function EventEditorScreen() {
             <View className="gap-5">
               {/* Title */}
               <View className="gap-2">
-                <Text className="text-sm font-semibold text-foreground">Event Title *</Text>
+                <Text className="text-sm font-semibold text-foreground">活動標題 *</Text>
                 <TextInput
                   value={title}
                   onChangeText={setTitle}
-                  placeholder="e.g. Team Meeting, Doctor Appointment"
+                  placeholder="例如：團隊會議、講座、預約"
                   placeholderTextColor={colors.muted}
                   returnKeyType="done"
                   style={{
@@ -195,7 +195,7 @@ export default function EventEditorScreen() {
 
               {/* Start Date */}
               <DateTimePickerField
-                label="Start Date"
+                label="開始日期"
                 value={startDateTime}
                 onChange={(date) => {
                   setStartDateTime(date);
@@ -212,7 +212,7 @@ export default function EventEditorScreen() {
 
               {/* Start Time */}
               <DateTimePickerField
-                label="Start Time"
+                label="開始時間"
                 value={startDateTime}
                 onChange={(date) => {
                   const newStart = new Date(startDateTime);
@@ -246,14 +246,14 @@ export default function EventEditorScreen() {
                   size={22}
                   color={hasEndDate ? colors.primary : colors.muted}
                 />
-                <Text style={{ color: colors.foreground, fontSize: 15 }}>Set end date & time</Text>
+                <Text style={{ color: colors.foreground, fontSize: 15 }}>設定結束日期和時間</Text>
               </Pressable>
 
               {/* End Date & Time (conditional) */}
               {hasEndDate && (
                 <>
                   <DateTimePickerField
-                    label="End Date"
+                    label="結束日期"
                     value={endDateTime}
                     onChange={(date) => {
                       const newEnd = new Date(endDateTime);
@@ -263,7 +263,7 @@ export default function EventEditorScreen() {
                     mode="date"
                   />
                   <DateTimePickerField
-                    label="End Time"
+                    label="結束時間"
                     value={endDateTime}
                     onChange={(date) => {
                       const newEnd = new Date(endDateTime);
@@ -277,7 +277,7 @@ export default function EventEditorScreen() {
 
               {/* Location */}
               <View className="gap-2">
-                <Text className="text-sm font-semibold text-foreground">Location</Text>
+                <Text className="text-sm font-semibold text-foreground">地點</Text>
                 <View
                   style={{
                     backgroundColor: colors.surface,
@@ -293,7 +293,7 @@ export default function EventEditorScreen() {
                   <TextInput
                     value={location}
                     onChangeText={setLocation}
-                    placeholder="Add a location"
+                    placeholder="添加地點"
                     placeholderTextColor={colors.muted}
                     returnKeyType="done"
                     style={{
@@ -309,11 +309,11 @@ export default function EventEditorScreen() {
 
               {/* Description */}
               <View className="gap-2">
-                <Text className="text-sm font-semibold text-foreground">Notes</Text>
+                <Text className="text-sm font-semibold text-foreground">備註</Text>
                 <TextInput
                   value={description}
                   onChangeText={setDescription}
-                  placeholder="Add any notes or details"
+                  placeholder="添加備註或詳情"
                   placeholderTextColor={colors.muted}
                   multiline
                   numberOfLines={4}
@@ -351,7 +351,7 @@ export default function EventEditorScreen() {
                   >
                     <Ionicons name="checkmark-circle" size={20} color="white" />
                     <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
-                      Added to Calendar
+                      已添加至日曆
                     </Text>
                   </View>
                   <Pressable
@@ -372,7 +372,7 @@ export default function EventEditorScreen() {
                   >
                     <Ionicons name="camera-outline" size={18} color="white" />
                     <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
-                      Scan Another Image
+                      掃描其他圖片
                     </Text>
                   </Pressable>
                   <Pressable
@@ -386,7 +386,7 @@ export default function EventEditorScreen() {
                       },
                     ]}
                   >
-                    <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 16 }}>Back to Home</Text>
+                    <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 16 }}>返回首頁</Text>
                   </Pressable>
                 </>
               ) : (
@@ -415,7 +415,7 @@ export default function EventEditorScreen() {
                       <>
                         <Ionicons name="calendar" size={20} color="white" />
                         <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
-                          Add to Calendar
+                          加至日曆
                         </Text>
                       </>
                     )}
@@ -435,7 +435,7 @@ export default function EventEditorScreen() {
                     ]}
                   >
                     <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 16 }}>
-                      Cancel
+                      取消
                     </Text>
                   </Pressable>
                 </>

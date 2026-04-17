@@ -86,7 +86,7 @@ export default function EventPreviewScreen() {
         if (extractedEvents.length > 0) {
           setEvents(extractedEvents);
         } else {
-          setError("No events could be found in this image. Try a clearer image with visible dates and times.");
+          setError("無法從此圖片中找到活動資訊。請嘗試使用日期和時間更清晰的圖片。");
         }
       } else {
         setError((result as any).error || "Failed to extract event information");
@@ -156,7 +156,7 @@ export default function EventPreviewScreen() {
   const getConfidenceInfo = (confidence: number) => {
     const percent = Math.round(confidence * 100);
     const color = confidence > 0.8 ? colors.success : confidence > 0.6 ? colors.warning : colors.error;
-    const label = confidence > 0.8 ? "High" : confidence > 0.6 ? "Medium" : "Low";
+    const label = confidence > 0.8 ? "高" : confidence > 0.6 ? "中" : "低";
     return { percent, color, label };
   };
 
@@ -214,7 +214,7 @@ export default function EventPreviewScreen() {
       } catch (error) {
         console.error("Calendar error:", error);
         const errorMsg = error instanceof Error ? error.message : "Failed to add event";
-        Alert.alert("Error", errorMsg);
+        Alert.alert("錯誤", errorMsg);
         setAddStatuses((prev) => {
           const next = new Map(prev);
           indices.forEach((i) => {
@@ -274,9 +274,9 @@ export default function EventPreviewScreen() {
           >
             <ActivityIndicator size="large" color={colors.primary} />
           </View>
-          <Text className="text-lg font-semibold text-foreground">Analyzing Image...</Text>
+          <Text className="text-lg font-semibold text-foreground">正在分析圖片...</Text>
           <Text className="text-sm text-muted text-center px-8">
-            Extracting event details including dates, times, and locations
+            正在提取活動詳情，包括日期、時間和地點
           </Text>
         </View>
       </ScreenContainer>
@@ -294,7 +294,7 @@ export default function EventPreviewScreen() {
             <Ionicons name="alert-circle" size={48} color={colors.error} />
           </View>
           <Text className="text-lg font-semibold text-foreground text-center">
-            Could Not Extract Events
+            無法識別活動
           </Text>
           <Text className="text-base text-muted text-center px-4">{error}</Text>
           <View className="gap-3 w-full mt-4">
@@ -311,7 +311,7 @@ export default function EventPreviewScreen() {
                 },
               ]}
             >
-              <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>Try Again</Text>
+              <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>重試</Text>
             </Pressable>
             <Pressable
               onPress={() => router.back()}
@@ -324,7 +324,7 @@ export default function EventPreviewScreen() {
                 },
               ]}
             >
-              <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 16 }}>Go Back</Text>
+              <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 16 }}>返回</Text>
             </Pressable>
           </View>
         </View>
@@ -343,7 +343,7 @@ export default function EventPreviewScreen() {
       return (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
           <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-          <Text style={{ color: colors.success, fontSize: 13, fontWeight: "600" }}>Added</Text>
+          <Text style={{ color: colors.success, fontSize: 13, fontWeight: "600" }}>已添加</Text>
         </View>
       );
     }
@@ -357,7 +357,7 @@ export default function EventPreviewScreen() {
           style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, flexDirection: "row", alignItems: "center", gap: 4 }]}
         >
           <Ionicons name="refresh" size={16} color={colors.error} />
-          <Text style={{ color: colors.error, fontSize: 13, fontWeight: "600" }}>Retry</Text>
+          <Text style={{ color: colors.error, fontSize: 13, fontWeight: "600" }}>重試</Text>
         </Pressable>
       );
     }
@@ -378,7 +378,7 @@ export default function EventPreviewScreen() {
         }]}
       >
         <Ionicons name="calendar-outline" size={14} color="white" />
-        <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add</Text>
+        <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>添加</Text>
       </Pressable>
     );
   };
@@ -398,10 +398,10 @@ export default function EventPreviewScreen() {
             </Pressable>
             <View className="flex-1">
               <Text className="text-2xl font-bold text-foreground">
-                {events.length === 1 ? "Event Found" : `${events.length} Events Found`}
+                {events.length === 1 ? "找到 1 個活動" : `找到 ${events.length} 個活動`}
               </Text>
               <Text className="text-sm text-muted">
-                Tap to add events to your calendar
+                點擊添加活動到你的日曆
               </Text>
             </View>
           </View>
@@ -442,13 +442,13 @@ export default function EventPreviewScreen() {
                         }}
                       >
                         <Text style={{ color: colors.primary, fontSize: 12, fontWeight: "600" }}>
-                          {group.events.length} Time Slots
+                          {group.events.length} 個時段
                         </Text>
                       </View>
                       {allAdded && (
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                           <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                          <Text style={{ color: colors.success, fontSize: 12, fontWeight: "600" }}>All Added</Text>
+                          <Text style={{ color: colors.success, fontSize: 12, fontWeight: "600" }}>已全部添加</Text>
                         </View>
                       )}
                     </View>
@@ -502,7 +502,7 @@ export default function EventPreviewScreen() {
                           {evt.endDate && (
                             <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginLeft: 20 }}>
                               <Text style={{ color: colors.muted, fontSize: 13 }}>
-                                to {formatShortDateTime(evt.endDate)}
+                                至 {formatShortDateTime(evt.endDate)}
                               </Text>
                             </View>
                           )}
@@ -535,7 +535,7 @@ export default function EventPreviewScreen() {
                       }]}
                     >
                       <Ionicons name="pencil-outline" size={16} color={colors.primary} />
-                      <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 14 }}>Edit</Text>
+                      <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 14 }}>編輯</Text>
                     </Pressable>
                     <Pressable
                       onPress={() => initiateAddToCalendar(group.events, groupIndices)}
@@ -557,12 +557,12 @@ export default function EventPreviewScreen() {
                       ) : allAdded ? (
                         <>
                           <Ionicons name="checkmark-done" size={16} color={colors.success} />
-                          <Text style={{ color: colors.success, fontWeight: "600", fontSize: 14 }}>All Added</Text>
+                          <Text style={{ color: colors.success, fontWeight: "600", fontSize: 14 }}>已全部添加</Text>
                         </>
                       ) : (
                         <>
                           <Ionicons name="calendar" size={16} color={colors.primary} />
-                          <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 14 }}>Add All</Text>
+                          <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 14 }}>全部添加</Text>
                         </>
                       )}
                     </Pressable>
@@ -605,7 +605,7 @@ export default function EventPreviewScreen() {
                     {status === "added" ? (
                       <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: `${colors.success}20`, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
                         <Ionicons name="checkmark-circle" size={14} color={colors.success} />
-                        <Text style={{ color: colors.success, fontSize: 12, fontWeight: "600" }}>Added</Text>
+                        <Text style={{ color: colors.success, fontSize: 12, fontWeight: "600" }}>已添加</Text>
                       </View>
                     ) : (
                       <View
@@ -634,7 +634,7 @@ export default function EventPreviewScreen() {
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                       <Ionicons name="arrow-forward-outline" size={16} color={colors.muted} />
                       <Text style={{ color: colors.muted, fontSize: 14 }}>
-                        to {formatDateTime(evt.endDate)}
+                        至 {formatDateTime(evt.endDate)}
                       </Text>
                     </View>
                   )}
@@ -681,7 +681,7 @@ export default function EventPreviewScreen() {
                   >
                     <Ionicons name="pencil-outline" size={16} color={colors.primary} />
                     <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 15 }}>
-                      Edit
+                      編輯
                     </Text>
                   </Pressable>
                   <Pressable
@@ -706,18 +706,18 @@ export default function EventPreviewScreen() {
                     ) : status === "added" ? (
                       <>
                         <Ionicons name="checkmark-circle" size={16} color={colors.success} />
-                        <Text style={{ color: colors.success, fontWeight: "600", fontSize: 15 }}>Added</Text>
+                        <Text style={{ color: colors.success, fontWeight: "600", fontSize: 15 }}>已添加</Text>
                       </>
                     ) : status === "error" ? (
                       <>
                         <Ionicons name="refresh" size={16} color={colors.error} />
-                        <Text style={{ color: colors.error, fontWeight: "600", fontSize: 15 }}>Retry</Text>
+                        <Text style={{ color: colors.error, fontWeight: "600", fontSize: 15 }}>重試</Text>
                       </>
                     ) : (
                       <>
                         <Ionicons name="calendar" size={16} color={colors.primary} />
                         <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 15 }}>
-                          Add to Calendar
+                          加至日曆
                         </Text>
                       </>
                     )}
@@ -747,7 +747,7 @@ export default function EventPreviewScreen() {
           >
             <Ionicons name="camera-outline" size={18} color={colors.muted} />
             <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 15 }}>
-              Scan Different Image
+              掃描其他圖片
             </Text>
           </Pressable>
         </ScrollView>
