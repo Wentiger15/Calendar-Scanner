@@ -60,6 +60,62 @@ async function startServer() {
     res.json({ ok: true, timestamp: Date.now() });
   });
 
+  // .ics file endpoint for Apple Calendar
+  // iOS Safari will recognize Content-Type: text/calendar and open the Calendar app
+  app.get("/api/calendar/event.ics", (req, res) => {
+    const { title, start, end, location, description } = req.query;
+
+    if (!title || !start) {
+      res.status(400).json({ error: "title and start are required" });
+      return;
+    }
+
+    const startDate = new Date(start as string);
+    let endDate: Date;
+    if (end) {
+      endDate = new Date(end as string);
+    } else {
+      endDate = new Date(startDate);
+      endDate.setHours(endDate.getHours() + 1);
+    }
+
+    const toIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+    const escapeIcs = (str: string) => str.replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
+    const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@calendarscanner`;
+
+    const lines = [
+      "BEGIN:VCALENDAR",
+      "VERSION:2.0",
+      "PRODID:-//Calendar Scanner//EN",
+      "CALSCALE:GREGORIAN",
+      "METHOD:PUBLISH",
+      "BEGIN:VEVENT",
+      `UID:${uid}`,
+      `DTSTART:${toIcsDate(startDate)}`,
+      `DTEND:${toIcsDate(endDate)}`,
+      `SUMMARY:${escapeIcs(title as string)}`,
+    ];
+
+    if (location) lines.push(`LOCATION:${escapeIcs(location as string)}`);
+    if (description) lines.push(`DESCRIPTION:${escapeIcs(description as string)}`);
+
+    lines.push(
+      "BEGIN:VALARM",
+      "TRIGGER:-PT15M",
+      "ACTION:DISPLAY",
+      "DESCRIPTION:Reminder",
+      "END:VALARM",
+      "END:VEVENT",
+      "END:VCALENDAR",
+    );
+
+    const icsContent = lines.join("\r\n");
+
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="event.ics"`);
+    res.send(icsContent);
+  });
+
   app.use(
     "/api/trpc",
     createExpressMiddleware({

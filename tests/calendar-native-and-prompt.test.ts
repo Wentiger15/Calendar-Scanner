@@ -36,9 +36,11 @@ describe("CalendarAddSheet component", () => {
     expect(content).toContain("openAppleCalendarWeb");
   });
 
-  it("should handle multi-event addition", () => {
+  it("should handle multi-event addition with individual Apple Calendar buttons", () => {
     const content = fs.readFileSync("components/calendar-add-sheet.tsx", "utf-8");
-    expect(content).toContain("openAppleCalendarWebMulti");
+    // Multi-event: each event gets its own Apple Calendar button
+    expect(content).toContain("handleAppleCalendar");
+    expect(content).toContain("時段");
   });
 });
 

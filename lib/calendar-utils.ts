@@ -1,5 +1,6 @@
-import { Platform, Alert, Linking } from "react-native";
+import { Platform, Linking } from "react-native";
 import * as Calendar from "expo-calendar";
+import { getApiBaseUrl } from "@/constants/oauth";
 
 export interface CalendarEvent {
   title: string;
@@ -44,7 +45,26 @@ export function buildGoogleCalendarUrl(evt: CalendarEvent): string {
 }
 
 /**
- * Generate .ics content for Apple Calendar / webcal approach.
+ * Build a server-hosted .ics URL for Apple Calendar.
+ * iOS Safari will recognize Content-Type: text/calendar and open the Calendar app
+ * with the "Add to Calendar" dialog — this is the ONLY reliable way on iOS Safari.
+ */
+export function buildAppleCalendarUrl(evt: CalendarEvent): string {
+  const apiBase = getApiBaseUrl();
+  const params = new URLSearchParams({
+    title: evt.title,
+    start: evt.startDate,
+  });
+
+  if (evt.endDate) params.set("end", evt.endDate);
+  if (evt.location) params.set("location", evt.location);
+  if (evt.description) params.set("description", evt.description);
+
+  return `${apiBase}/api/calendar/event.ics?${params.toString()}`;
+}
+
+/**
+ * Generate .ics content for local use (tests, etc.)
  */
 export function generateIcsContent(evt: CalendarEvent): string {
   const startDate = new Date(evt.startDate);
@@ -138,23 +158,28 @@ export async function openGoogleCalendar(evt: CalendarEvent): Promise<void> {
 }
 
 /**
- * Open Apple Calendar via data URI on web.
- * Creates a Blob URL and opens it, which triggers iOS to show the calendar add dialog.
+ * Open Apple Calendar via server-hosted .ics URL on web.
+ * iOS Safari will download the .ics file and show the native "Add to Calendar" dialog.
+ * 
+ * IMPORTANT: We use window.location.href (not window.open) because:
+ * - window.open may be blocked by popup blockers
+ * - window.location.href triggers a direct navigation that iOS Safari handles natively
+ * - iOS Safari recognizes text/calendar Content-Type and opens Calendar app
  */
 export function openAppleCalendarWeb(evt: CalendarEvent): void {
-  const icsContent = generateIcsContent(evt);
-  // Use data URI approach - iOS Safari will recognize text/calendar and open Calendar app
-  const dataUri = "data:text/calendar;charset=utf-8," + encodeURIComponent(icsContent);
-  window.open(dataUri, "_self");
+  const url = buildAppleCalendarUrl(evt);
+  window.location.href = url;
 }
 
 /**
- * Open Apple Calendar for multiple events via data URI on web.
+ * Open Apple Calendar for multiple events - opens each one sequentially.
+ * Since iOS can only handle one .ics at a time, we open the first one.
+ * User can add remaining events one by one.
  */
 export function openAppleCalendarWebMulti(events: CalendarEvent[]): void {
-  const icsContent = generateMultiIcsContent(events);
-  const dataUri = "data:text/calendar;charset=utf-8," + encodeURIComponent(icsContent);
-  window.open(dataUri, "_self");
+  if (events.length > 0) {
+    openAppleCalendarWeb(events[0]);
+  }
 }
 
 /**

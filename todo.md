@@ -104,3 +104,7 @@
 ## Optimization - Round 6
 
 - [ ] Fix: Published API server (calendarscan-zxxerbqr.manus.space) running old server code - returns "Untitled Event" for multi-time-slot image while local API returns correct 2 events
+
+## Optimization - Round 7
+
+- [ ] Fix: Add to Apple Calendar button does not actually add events to Apple Calendar - need working .ics delivery method
