@@ -1,16 +1,16 @@
-import { ScrollView, Text, View, Pressable, ActivityIndicator, Platform, Alert, Modal } from "react-native";
+import { ScrollView, Text, View, Pressable, ActivityIndicator, Platform, Alert } from "react-native";
 import { useState, useEffect, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { Ionicons } from "@expo/vector-icons";
 import { trpc } from "@/lib/trpc";
-import * as Calendar from "expo-calendar";
+import { CalendarAddSheet } from "@/components/calendar-add-sheet";
+import { addToNativeCalendar, type CalendarEvent } from "@/lib/calendar-utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 /**
  * Convert an image URI to a base64 data URL.
- * Works on both Web (fetch + blob + FileReader) and native.
  */
 async function uriToBase64DataUrl(uri: string): Promise<string> {
   const response = await fetch(uri);
@@ -29,24 +29,14 @@ async function uriToBase64DataUrl(uri: string): Promise<string> {
   });
 }
 
-interface ExtractedEvent {
-  title: string;
-  startDate: string;
-  endDate?: string;
-  location?: string;
-  description?: string;
-  confidence: number;
-}
-
 /** Status for each event card's "add to calendar" action */
 type AddStatus = "idle" | "adding" | "added" | "canceled" | "error";
 
 /**
  * Group events by title for multi-time-slot display.
- * Events with the same title are grouped together.
  */
-function groupEventsByTitle(events: ExtractedEvent[]): { title: string; events: ExtractedEvent[] }[] {
-  const groups: Map<string, ExtractedEvent[]> = new Map();
+function groupEventsByTitle(events: CalendarEvent[]): { title: string; events: CalendarEvent[] }[] {
+  const groups: Map<string, CalendarEvent[]> = new Map();
   for (const event of events) {
     const key = event.title.trim();
     if (!groups.has(key)) {
@@ -57,121 +47,20 @@ function groupEventsByTitle(events: ExtractedEvent[]): { title: string; events: 
   return Array.from(groups.entries()).map(([title, evts]) => ({ title, events: evts }));
 }
 
-/**
- * Generate an .ics file content string for the given event.
- */
-function generateIcsContent(evt: ExtractedEvent): string {
-  const startDate = new Date(evt.startDate);
-  let endDate: Date;
-  if (evt.endDate) {
-    endDate = new Date(evt.endDate);
-  } else {
-    endDate = new Date(startDate);
-    endDate.setHours(endDate.getHours() + 1);
-  }
-
-  const toIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-  const escapeIcs = (str: string) => str.replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
-  const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@calendarscanner`;
-
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Calendar Scanner//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-    "BEGIN:VEVENT",
-    `UID:${uid}`,
-    `DTSTART:${toIcsDate(startDate)}`,
-    `DTEND:${toIcsDate(endDate)}`,
-    `SUMMARY:${escapeIcs(evt.title)}`,
-  ];
-
-  if (evt.location) lines.push(`LOCATION:${escapeIcs(evt.location)}`);
-  if (evt.description) lines.push(`DESCRIPTION:${escapeIcs(evt.description)}`);
-
-  lines.push("BEGIN:VALARM", "TRIGGER:-PT15M", "ACTION:DISPLAY", "DESCRIPTION:Reminder", "END:VALARM");
-  lines.push("END:VEVENT", "END:VCALENDAR");
-
-  return lines.join("\r\n");
-}
-
-/**
- * Generate a multi-event .ics file for adding all events at once.
- */
-function generateMultiIcsContent(events: ExtractedEvent[]): string {
-  const lines = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//Calendar Scanner//EN",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-  ];
-
-  for (const evt of events) {
-    const startDate = new Date(evt.startDate);
-    let endDate: Date;
-    if (evt.endDate) {
-      endDate = new Date(evt.endDate);
-    } else {
-      endDate = new Date(startDate);
-      endDate.setHours(endDate.getHours() + 1);
-    }
-
-    const toIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-    const escapeIcs = (str: string) => str.replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
-    const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}-${events.indexOf(evt)}@calendarscanner`;
-
-    lines.push("BEGIN:VEVENT");
-    lines.push(`UID:${uid}`);
-    lines.push(`DTSTART:${toIcsDate(startDate)}`);
-    lines.push(`DTEND:${toIcsDate(endDate)}`);
-    lines.push(`SUMMARY:${escapeIcs(evt.title)}`);
-    if (evt.location) lines.push(`LOCATION:${escapeIcs(evt.location)}`);
-    if (evt.description) lines.push(`DESCRIPTION:${escapeIcs(evt.description)}`);
-    lines.push("BEGIN:VALARM", "TRIGGER:-PT15M", "ACTION:DISPLAY", "DESCRIPTION:Reminder", "END:VALARM");
-    lines.push("END:VEVENT");
-  }
-
-  lines.push("END:VCALENDAR");
-  return lines.join("\r\n");
-}
-
-/**
- * Download .ics content on Web platform.
- * Uses Blob + link approach for best compatibility.
- */
-function downloadIcsWeb(icsContent: string, filename?: string) {
-  const fname = filename || "event.ics";
-  try {
-    const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = fname;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch {
-    // Fallback: data URI
-    const dataUri = "data:text/calendar;charset=utf-8," + encodeURIComponent(icsContent);
-    window.location.href = dataUri;
-  }
-}
-
 export default function EventPreviewScreen() {
   const router = useRouter();
   const colors = useColors();
   const { imageUri } = useLocalSearchParams<{ imageUri: string }>();
 
-  const [events, setEvents] = useState<ExtractedEvent[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Track add-to-calendar status per event index
   const [addStatuses, setAddStatuses] = useState<Map<number, AddStatus>>(new Map());
-  // Web: show instruction modal after .ics download
-  const [showIcsGuide, setShowIcsGuide] = useState(false);
+
+  // Calendar add sheet state
+  const [sheetVisible, setSheetVisible] = useState(false);
+  const [sheetEvents, setSheetEvents] = useState<CalendarEvent[]>([]);
+  const [sheetEventIndices, setSheetEventIndices] = useState<number[]>([]);
 
   const extractEventMutation = trpc.events.extractFromImage.useMutation();
 
@@ -211,7 +100,7 @@ export default function EventPreviewScreen() {
     }
   };
 
-  const handleEditEvent = (event: ExtractedEvent) => {
+  const handleEditEvent = (event: CalendarEvent) => {
     router.push({
       pathname: "/event-editor",
       params: {
@@ -247,7 +136,6 @@ export default function EventPreviewScreen() {
     }
   };
 
-  /** Short format for multi-slot display: just date + time */
   const formatShortDateTime = (dateStr: string) => {
     try {
       const date = new Date(dateStr);
@@ -273,7 +161,7 @@ export default function EventPreviewScreen() {
   };
 
   /** Save event to recent events in AsyncStorage */
-  const saveToRecentEvents = async (evt: ExtractedEvent) => {
+  const saveToRecentEvents = async (evt: CalendarEvent) => {
     try {
       const recentEvents = JSON.parse(
         (await AsyncStorage.getItem("recentEvents")) || "[]"
@@ -292,164 +180,74 @@ export default function EventPreviewScreen() {
   };
 
   /**
-   * Add a single event to calendar.
-   * 
-   * Native (iOS/Android): Uses createEventInCalendarAsync to open the system calendar UI.
-   * This ensures the user sees the native calendar editor and can confirm the addition.
-   * No silent failures - the user must explicitly tap "Add" in the system UI.
-   * 
-   * Web: Downloads .ics file and shows instruction guide.
+   * Initiate adding event(s) to calendar.
+   * On Web: opens the CalendarAddSheet to choose Google/Apple Calendar.
+   * On Native: directly opens system calendar UI.
    */
-  const addSingleEventToCalendar = useCallback(async (evt: ExtractedEvent, eventIndex: number) => {
-    setAddStatuses((prev) => new Map(prev).set(eventIndex, "adding"));
-
-    try {
-      if (Platform.OS === "web") {
-        // Web: download .ics file
-        const icsContent = generateIcsContent(evt);
-        const safeName = evt.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_").slice(0, 50);
-        downloadIcsWeb(icsContent, `${safeName}.ics`);
-        await saveToRecentEvents(evt);
-        // Show instruction guide for iOS Safari users
-        setShowIcsGuide(true);
-        setAddStatuses((prev) => new Map(prev).set(eventIndex, "added"));
-      } else {
-        // Native: use createEventInCalendarAsync to open system calendar UI
-        const startDate = new Date(evt.startDate);
-        let endDate: Date;
-        if (evt.endDate) {
-          endDate = new Date(evt.endDate);
-        } else {
-          endDate = new Date(startDate);
-          endDate.setHours(endDate.getHours() + 1);
-        }
-
-        const result = await Calendar.createEventInCalendarAsync(
-          {
-            title: evt.title,
-            startDate,
-            endDate,
-            location: evt.location,
-            notes: evt.description,
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-            alarms: [{ relativeOffset: -15 }],
-          },
-          { startNewActivityTask: true }
-        );
-
-        // Check if user actually saved the event
-        if (result.action === "saved" || result.action === "done") {
-          await saveToRecentEvents(evt);
-          setAddStatuses((prev) => new Map(prev).set(eventIndex, "added"));
-        } else {
-          // User canceled
-          setAddStatuses((prev) => new Map(prev).set(eventIndex, "canceled"));
-          // Reset to idle after a moment so they can try again
-          setTimeout(() => {
-            setAddStatuses((prev) => {
-              const next = new Map(prev);
-              if (next.get(eventIndex) === "canceled") {
-                next.set(eventIndex, "idle");
-              }
-              return next;
-            });
-          }, 2000);
-        }
-      }
-    } catch (error) {
-      console.error("Calendar error:", error);
-      if (Platform.OS !== "web") {
-        const errorMsg = error instanceof Error ? error.message : "Failed to add event";
-        Alert.alert("Error", errorMsg);
-      }
-      setAddStatuses((prev) => new Map(prev).set(eventIndex, "error"));
-    }
-  }, []);
-
-  /**
-   * Add all events in a group to calendar at once.
-   * On Web: generates a single multi-event .ics file.
-   * On Native: opens system calendar UI for each event sequentially.
-   */
-  const addAllEventsInGroup = useCallback(async (groupEvents: ExtractedEvent[], startIndex: number) => {
+  const initiateAddToCalendar = useCallback(async (evts: CalendarEvent[], indices: number[]) => {
     // Mark all as adding
     setAddStatuses((prev) => {
       const next = new Map(prev);
-      groupEvents.forEach((_, i) => next.set(startIndex + i, "adding"));
+      indices.forEach((i) => next.set(i, "adding"));
       return next;
     });
 
-    try {
-      if (Platform.OS === "web") {
-        const icsContent = generateMultiIcsContent(groupEvents);
-        const safeName = groupEvents[0].title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_").slice(0, 50);
-        downloadIcsWeb(icsContent, `${safeName}_all.ics`);
-        setShowIcsGuide(true);
-
-        for (const evt of groupEvents) {
-          await saveToRecentEvents(evt);
+    if (Platform.OS === "web") {
+      // Show the calendar choice sheet
+      setSheetEvents(evts);
+      setSheetEventIndices(indices);
+      setSheetVisible(true);
+    } else {
+      // Native: add each event using system calendar UI
+      try {
+        for (let j = 0; j < evts.length; j++) {
+          const evt = evts[j];
+          const idx = indices[j];
+          const saved = await addToNativeCalendar(evt);
+          if (saved) {
+            await saveToRecentEvents(evt);
+            setAddStatuses((prev) => new Map(prev).set(idx, "added"));
+          } else {
+            setAddStatuses((prev) => new Map(prev).set(idx, "idle"));
+          }
         }
+      } catch (error) {
+        console.error("Calendar error:", error);
+        const errorMsg = error instanceof Error ? error.message : "Failed to add event";
+        Alert.alert("Error", errorMsg);
         setAddStatuses((prev) => {
           const next = new Map(prev);
-          groupEvents.forEach((_, i) => next.set(startIndex + i, "added"));
+          indices.forEach((i) => {
+            if (next.get(i) !== "added") next.set(i, "error");
+          });
           return next;
         });
-      } else {
-        // Native: add each event using system calendar UI
-        let allSaved = true;
-        for (let i = 0; i < groupEvents.length; i++) {
-          const evt = groupEvents[i];
-          const startDate = new Date(evt.startDate);
-          let endDate: Date;
-          if (evt.endDate) {
-            endDate = new Date(evt.endDate);
-          } else {
-            endDate = new Date(startDate);
-            endDate.setHours(endDate.getHours() + 1);
-          }
-
-          const result = await Calendar.createEventInCalendarAsync(
-            {
-              title: evt.title,
-              startDate,
-              endDate,
-              location: evt.location,
-              notes: evt.description,
-              timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-              alarms: [{ relativeOffset: -15 }],
-            },
-            { startNewActivityTask: true }
-          );
-
-          if (result.action === "saved" || result.action === "done") {
-            await saveToRecentEvents(evt);
-            setAddStatuses((prev) => new Map(prev).set(startIndex + i, "added"));
-          } else {
-            allSaved = false;
-            setAddStatuses((prev) => new Map(prev).set(startIndex + i, "idle"));
-          }
-        }
-
-        if (!allSaved) {
-          Alert.alert(
-            "Partial Addition",
-            "Some events were not added. You can add the remaining ones individually."
-          );
-        }
       }
-    } catch (error) {
-      console.error("Calendar error:", error);
-      setAddStatuses((prev) => {
-        const next = new Map(prev);
-        groupEvents.forEach((_, i) => {
-          if (next.get(startIndex + i) !== "added") {
-            next.set(startIndex + i, "error");
-          }
-        });
-        return next;
-      });
     }
   }, []);
+
+  /** Called when the CalendarAddSheet reports success */
+  const handleSheetSuccess = useCallback(async () => {
+    for (const evt of sheetEvents) {
+      await saveToRecentEvents(evt);
+    }
+    setAddStatuses((prev) => {
+      const next = new Map(prev);
+      sheetEventIndices.forEach((i) => next.set(i, "added"));
+      return next;
+    });
+  }, [sheetEvents, sheetEventIndices]);
+
+  /** Called when the CalendarAddSheet is canceled */
+  const handleSheetCancel = useCallback(() => {
+    setAddStatuses((prev) => {
+      const next = new Map(prev);
+      sheetEventIndices.forEach((i) => {
+        if (next.get(i) !== "added") next.set(i, "idle");
+      });
+      return next;
+    });
+  }, [sheetEventIndices]);
 
   // Check if all events in a group are added
   const isGroupAllAdded = (startIndex: number, count: number) => {
@@ -459,7 +257,6 @@ export default function EventPreviewScreen() {
     return true;
   };
 
-  // Check if any event in a group is being added
   const isGroupAdding = (startIndex: number, count: number) => {
     for (let i = startIndex; i < startIndex + count; i++) {
       if (addStatuses.get(i) === "adding") return true;
@@ -538,72 +335,51 @@ export default function EventPreviewScreen() {
   // Group events by title for multi-time-slot display
   const eventGroups = groupEventsByTitle(events);
 
-  /** Render the add button for a single event slot */
-  const renderAddButton = (evt: ExtractedEvent, eventIdx: number, compact?: boolean) => {
+  /** Render the status/action indicator for a single event slot */
+  const renderSlotStatus = (evt: CalendarEvent, eventIdx: number) => {
     const status = addStatuses.get(eventIdx) || "idle";
-    const fontSize = compact ? 13 : 15;
-    const iconSize = compact ? 16 : 16;
 
     if (status === "added") {
       return (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <Ionicons name="checkmark-circle" size={iconSize} color={colors.success} />
-          <Text style={{ color: colors.success, fontSize, fontWeight: "600" }}>Added</Text>
+          <Ionicons name="checkmark-circle" size={16} color={colors.success} />
+          <Text style={{ color: colors.success, fontSize: 13, fontWeight: "600" }}>Added</Text>
         </View>
       );
     }
     if (status === "adding") {
       return <ActivityIndicator size="small" color={colors.primary} />;
     }
-    if (status === "canceled") {
-      return (
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-          <Ionicons name="close-circle-outline" size={iconSize} color={colors.muted} />
-          <Text style={{ color: colors.muted, fontSize, fontWeight: "600" }}>Canceled</Text>
-        </View>
-      );
-    }
     if (status === "error") {
       return (
         <Pressable
-          onPress={() => addSingleEventToCalendar(evt, eventIdx)}
+          onPress={() => initiateAddToCalendar([evt], [eventIdx])}
           style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1, flexDirection: "row", alignItems: "center", gap: 4 }]}
         >
-          <Ionicons name="refresh" size={iconSize} color={colors.error} />
-          <Text style={{ color: colors.error, fontSize, fontWeight: "600" }}>Retry</Text>
+          <Ionicons name="refresh" size={16} color={colors.error} />
+          <Text style={{ color: colors.error, fontSize: 13, fontWeight: "600" }}>Retry</Text>
         </Pressable>
       );
     }
 
-    // idle
-    if (compact) {
-      return (
-        <Pressable
-          onPress={() => addSingleEventToCalendar(evt, eventIdx)}
-          style={({ pressed }) => [{
-            opacity: pressed ? 0.7 : 1,
-            backgroundColor: colors.primary,
-            paddingHorizontal: 12,
-            paddingVertical: 6,
-            borderRadius: 8,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 4,
-          }]}
-        >
-          <Ionicons name="calendar-outline" size={14} color="white" />
-          <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add</Text>
-        </Pressable>
-      );
-    }
-
+    // idle - show compact Add button
     return (
-      <>
-        <Ionicons name="calendar" size={iconSize} color="white" />
-        <Text style={{ color: "white", fontWeight: "600", fontSize }}>
-          Add to Calendar
-        </Text>
-      </>
+      <Pressable
+        onPress={() => initiateAddToCalendar([evt], [eventIdx])}
+        style={({ pressed }) => [{
+          opacity: pressed ? 0.7 : 1,
+          backgroundColor: colors.primary,
+          paddingHorizontal: 12,
+          paddingVertical: 6,
+          borderRadius: 8,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 4,
+        }]}
+      >
+        <Ionicons name="calendar-outline" size={14} color="white" />
+        <Text style={{ color: "white", fontSize: 13, fontWeight: "600" }}>Add</Text>
+      </Pressable>
     );
   };
 
@@ -625,9 +401,7 @@ export default function EventPreviewScreen() {
                 {events.length === 1 ? "Event Found" : `${events.length} Events Found`}
               </Text>
               <Text className="text-sm text-muted">
-                {Platform.OS === "web"
-                  ? "Download .ics file to add to your calendar"
-                  : "Tap to open calendar and add events"}
+                Tap to add events to your calendar
               </Text>
             </View>
           </View>
@@ -643,6 +417,8 @@ export default function EventPreviewScreen() {
 
             if (isMultiSlot) {
               // Multi-time-slot event group
+              const groupIndices = group.events.map((_, i) => groupStartIndex + i);
+
               return (
                 <View
                   key={`group-${groupIndex}`}
@@ -716,7 +492,6 @@ export default function EventPreviewScreen() {
                           gap: 12,
                         }}
                       >
-                        {/* Time info */}
                         <View style={{ flex: 1, gap: 2 }}>
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                             <Ionicons name="time-outline" size={14} color={colors.primary} />
@@ -732,9 +507,7 @@ export default function EventPreviewScreen() {
                             </View>
                           )}
                         </View>
-
-                        {/* Per-slot action button */}
-                        {renderAddButton(evt, eventIdx, true)}
+                        {renderSlotStatus(evt, eventIdx)}
                       </View>
                     );
                   })}
@@ -765,7 +538,7 @@ export default function EventPreviewScreen() {
                       <Text style={{ color: colors.primary, fontWeight: "600", fontSize: 14 }}>Edit</Text>
                     </Pressable>
                     <Pressable
-                      onPress={() => addAllEventsInGroup(group.events, groupStartIndex)}
+                      onPress={() => initiateAddToCalendar(group.events, groupIndices)}
                       disabled={allAdded || anyAdding}
                       style={({ pressed }) => [{
                         flex: 1,
@@ -777,7 +550,6 @@ export default function EventPreviewScreen() {
                         borderLeftWidth: 0.5,
                         borderLeftColor: colors.border,
                         opacity: (pressed || allAdded || anyAdding) ? 0.5 : 1,
-                        backgroundColor: (allAdded || anyAdding) ? "transparent" : (pressed ? `${colors.primary}10` : "transparent"),
                       }]}
                     >
                       {anyAdding ? (
@@ -818,7 +590,6 @@ export default function EventPreviewScreen() {
               >
                 {/* Event Header */}
                 <View style={{ padding: 20, gap: 12 }}>
-                  {/* Title Row */}
                   <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between" }}>
                     <Text
                       style={{
@@ -852,7 +623,6 @@ export default function EventPreviewScreen() {
                     )}
                   </View>
 
-                  {/* Date & Time */}
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                     <Ionicons name="time-outline" size={16} color={colors.primary} />
                     <Text style={{ color: colors.foreground, fontSize: 15 }}>
@@ -869,7 +639,6 @@ export default function EventPreviewScreen() {
                     </View>
                   )}
 
-                  {/* Location */}
                   {evt.location && (
                     <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
                       <Ionicons name="location-outline" size={16} color={colors.primary} />
@@ -879,7 +648,6 @@ export default function EventPreviewScreen() {
                     </View>
                   )}
 
-                  {/* Description */}
                   {evt.description && (
                     <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 20 }} numberOfLines={3}>
                       {evt.description}
@@ -917,7 +685,7 @@ export default function EventPreviewScreen() {
                     </Text>
                   </Pressable>
                   <Pressable
-                    onPress={() => addSingleEventToCalendar(evt, eventIdx)}
+                    onPress={() => initiateAddToCalendar([evt], [eventIdx])}
                     disabled={status === "added" || status === "adding"}
                     style={({ pressed }) => [
                       {
@@ -930,7 +698,6 @@ export default function EventPreviewScreen() {
                         borderLeftWidth: 0.5,
                         borderLeftColor: colors.border,
                         opacity: (pressed || status === "added" || status === "adding") ? 0.7 : 1,
-                        backgroundColor: (status === "added" || status === "adding") ? "transparent" : (pressed ? `${colors.primary}10` : "transparent"),
                       },
                     ]}
                   >
@@ -986,110 +753,14 @@ export default function EventPreviewScreen() {
         </ScrollView>
       </View>
 
-      {/* iOS .ics instruction guide modal (Web only) */}
-      {Platform.OS === "web" && (
-        <Modal
-          visible={showIcsGuide}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setShowIcsGuide(false)}
-        >
-          <Pressable
-            onPress={() => setShowIcsGuide(false)}
-            style={{
-              flex: 1,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: 24,
-            }}
-          >
-            <Pressable
-              onPress={() => {}}
-              style={{
-                backgroundColor: colors.background,
-                borderRadius: 20,
-                padding: 24,
-                width: "100%",
-                maxWidth: 360,
-                gap: 16,
-              }}
-            >
-              <View style={{ alignItems: "center", gap: 8 }}>
-                <View style={{
-                  width: 56,
-                  height: 56,
-                  borderRadius: 28,
-                  backgroundColor: `${colors.primary}15`,
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}>
-                  <Ionicons name="download-outline" size={28} color={colors.primary} />
-                </View>
-                <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground, textAlign: "center" }}>
-                  .ics File Downloaded
-                </Text>
-              </View>
-
-              <Text style={{ fontSize: 15, color: colors.foreground, lineHeight: 22, textAlign: "center" }}>
-                A calendar file has been downloaded to your device. To complete adding the event:
-              </Text>
-
-              {/* Step 1 */}
-              <View style={{ flexDirection: "row", gap: 12, alignItems: "flex-start" }}>
-                <View style={{
-                  width: 28, height: 28, borderRadius: 14,
-                  backgroundColor: colors.primary,
-                  alignItems: "center", justifyContent: "center",
-                }}>
-                  <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>1</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.foreground }}>
-                    Open the downloaded .ics file
-                  </Text>
-                  <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 18 }}>
-                    Tap the file in your Downloads or the notification
-                  </Text>
-                </View>
-              </View>
-
-              {/* Step 2 */}
-              <View style={{ flexDirection: "row", gap: 12, alignItems: "flex-start" }}>
-                <View style={{
-                  width: 28, height: 28, borderRadius: 14,
-                  backgroundColor: colors.primary,
-                  alignItems: "center", justifyContent: "center",
-                }}>
-                  <Text style={{ color: "white", fontWeight: "700", fontSize: 14 }}>2</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: "600", color: colors.foreground }}>
-                    Tap "Add to Calendar" at the bottom
-                  </Text>
-                  <Text style={{ fontSize: 13, color: colors.muted, lineHeight: 18 }}>
-                    On iPhone, tap the "加至日曆" button at the bottom of the preview (not the checkmark at the top)
-                  </Text>
-                </View>
-              </View>
-
-              <Pressable
-                onPress={() => setShowIcsGuide(false)}
-                style={({ pressed }) => [{
-                  backgroundColor: colors.primary,
-                  borderRadius: 12,
-                  paddingVertical: 14,
-                  alignItems: "center",
-                  opacity: pressed ? 0.9 : 1,
-                  marginTop: 4,
-                }]}
-              >
-                <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>Got it</Text>
-              </Pressable>
-            </Pressable>
-          </Pressable>
-        </Modal>
-      )}
+      {/* Calendar choice sheet (Web only) */}
+      <CalendarAddSheet
+        visible={sheetVisible}
+        onClose={() => setSheetVisible(false)}
+        events={sheetEvents}
+        onSuccess={handleSheetSuccess}
+        onCancel={handleSheetCancel}
+      />
     </ScreenContainer>
   );
 }

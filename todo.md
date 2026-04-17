@@ -90,3 +90,13 @@
 - [x] Fix: iOS .ics preview UX confusion - added modal instruction guide after .ics download explaining to tap "加至日曆" not the checkmark
 - [x] Fix: Native calendar silently failing - replaced createEventAsync with createEventInCalendarAsync which opens system calendar UI for user confirmation
 - [x] Fix: Multi-time-slot events not extracted separately - added CRITICAL MULTI-TIME-SLOT section to AI prompt with Chinese date examples and explicit instructions
+
+- [x] Fix: Vercel deployment not updated with Round 4 fixes - pushed df9ba61 to GitHub, Vercel auto-deployed successfully
+- [x] Verify: Vercel bundle confirmed to contain new code (.ics File Downloaded, Time Slots, Add to Calendar guide, createEventInCalendarAsync)
+
+## Optimization - Round 5
+
+- [ ] Fix: Multi-time-slot image (澳門講解會) returns "Untitled Event" with no date/time - AI extraction completely fails
+- [ ] Fix: .ics download on iOS Safari doesn't actually add to calendar - users press checkmark (dismiss) instead of "加至日曆" - replace with Google/Apple Calendar URL scheme
+- [ ] Fix: Remove confusing ".ics Downloaded" button state - replace with clearer UX flow
+- [ ] Fix: Events show "Added to Calendar!" history but never appear in actual calendar

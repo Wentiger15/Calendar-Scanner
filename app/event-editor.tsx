@@ -5,7 +5,8 @@ import { ScreenContainer } from "@/components/screen-container";
 import { useColors } from "@/hooks/use-colors";
 import { Ionicons } from "@expo/vector-icons";
 import { DateTimePickerField } from "@/components/date-time-picker";
-import * as Calendar from "expo-calendar";
+import { CalendarAddSheet } from "@/components/calendar-add-sheet";
+import { addToNativeCalendar, type CalendarEvent } from "@/lib/calendar-utils";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 interface EventData {
@@ -31,6 +32,7 @@ export default function EventEditorScreen() {
   const [confidence, setConfidence] = useState(0.8);
   const [isAdding, setIsAdding] = useState(false);
   const [isAdded, setIsAdded] = useState(false);
+  const [sheetVisible, setSheetVisible] = useState(false);
 
   useEffect(() => {
     if (eventData) {
@@ -61,33 +63,14 @@ export default function EventEditorScreen() {
     }
   }, [eventData]);
 
-  /**
-   * Generate .ics content for web calendar download.
-   */
-  const generateIcsContent = (evt: EventData): string => {
-    const start = new Date(evt.startDate);
-    let end: Date;
-    if (evt.endDate) {
-      end = new Date(evt.endDate);
-    } else {
-      end = new Date(start);
-      end.setHours(end.getHours() + 1);
-    }
-    const toIcsDate = (d: Date) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
-    const escapeIcs = (str: string) => str.replace(/[\\;,]/g, (m) => `\\${m}`).replace(/\n/g, "\\n");
-    const uid = `${Date.now()}-${Math.random().toString(36).slice(2)}@calendarscanner`;
-    const lines = [
-      "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Calendar Scanner//EN",
-      "CALSCALE:GREGORIAN", "METHOD:PUBLISH", "BEGIN:VEVENT",
-      `UID:${uid}`, `DTSTART:${toIcsDate(start)}`, `DTEND:${toIcsDate(end)}`,
-      `SUMMARY:${escapeIcs(evt.title)}`,
-    ];
-    if (evt.location) lines.push(`LOCATION:${escapeIcs(evt.location)}`);
-    if (evt.description) lines.push(`DESCRIPTION:${escapeIcs(evt.description)}`);
-    lines.push("BEGIN:VALARM", "TRIGGER:-PT15M", "ACTION:DISPLAY", "DESCRIPTION:Reminder", "END:VALARM");
-    lines.push("END:VEVENT", "END:VCALENDAR");
-    return lines.join("\r\n");
-  };
+  const buildCurrentEvent = (): CalendarEvent => ({
+    title: title.trim(),
+    startDate: startDateTime.toISOString(),
+    endDate: hasEndDate ? endDateTime.toISOString() : undefined,
+    location: location.trim() || undefined,
+    description: description.trim() || undefined,
+    confidence,
+  });
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -100,78 +83,26 @@ export default function EventEditorScreen() {
       return;
     }
 
-    const updatedEvent: EventData = {
-      title: title.trim(),
-      startDate: startDateTime.toISOString(),
-      endDate: hasEndDate ? endDateTime.toISOString() : undefined,
-      location: location.trim() || undefined,
-      description: description.trim() || undefined,
-      confidence,
-    };
+    const updatedEvent = buildCurrentEvent();
 
     setIsAdding(true);
     try {
       if (Platform.OS === "web") {
-        // Web: generate .ics and download via Blob + link
-        const icsContent = generateIcsContent(updatedEvent);
-        const safeName = updatedEvent.title.replace(/[^a-zA-Z0-9\u4e00-\u9fff]/g, "_").slice(0, 50);
-        try {
-          const blob = new Blob([icsContent], { type: "text/calendar;charset=utf-8" });
-          const url = URL.createObjectURL(blob);
-          const link = document.createElement("a");
-          link.href = url;
-          link.download = `${safeName}.ics`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          setTimeout(() => URL.revokeObjectURL(url), 1000);
-        } catch {
-          const dataUri = "data:text/calendar;charset=utf-8," + encodeURIComponent(icsContent);
-          window.location.href = dataUri;
-        }
+        // Web: show calendar choice sheet
+        setSheetVisible(true);
+        setIsAdding(false);
+        return;
       } else {
-        // Native: use createEventInCalendarAsync to open system calendar UI
-        const start = new Date(updatedEvent.startDate);
-        let end: Date;
-        if (updatedEvent.endDate) {
-          end = new Date(updatedEvent.endDate);
-        } else {
-          end = new Date(start);
-          end.setHours(end.getHours() + 1);
-        }
-        const result = await Calendar.createEventInCalendarAsync(
-          {
-            title: updatedEvent.title,
-            startDate: start,
-            endDate: end,
-            location: updatedEvent.location,
-            notes: updatedEvent.description,
-            timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
-            alarms: [{ relativeOffset: -15 }],
-          },
-          { startNewActivityTask: true }
-        );
-        // Check if user actually saved the event
-        if (result.action !== "saved" && result.action !== "done") {
-          // User canceled
+        // Native: open system calendar UI
+        const saved = await addToNativeCalendar(updatedEvent);
+        if (!saved) {
           setIsAdding(false);
           return;
         }
       }
 
       // Save to recent events
-      try {
-        const recent = JSON.parse((await AsyncStorage.getItem("recentEvents")) || "[]");
-        recent.unshift({
-          id: Date.now().toString(),
-          title: updatedEvent.title,
-          startDate: updatedEvent.startDate,
-          location: updatedEvent.location,
-          addedAt: new Date().toISOString(),
-        });
-        await AsyncStorage.setItem("recentEvents", JSON.stringify(recent.slice(0, 20)));
-      } catch {}
-
+      await saveToRecent(updatedEvent);
       setIsAdded(true);
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : "Failed to add event";
@@ -179,6 +110,26 @@ export default function EventEditorScreen() {
     } finally {
       setIsAdding(false);
     }
+  };
+
+  const saveToRecent = async (evt: CalendarEvent) => {
+    try {
+      const recent = JSON.parse((await AsyncStorage.getItem("recentEvents")) || "[]");
+      recent.unshift({
+        id: Date.now().toString(),
+        title: evt.title,
+        startDate: evt.startDate,
+        location: evt.location,
+        addedAt: new Date().toISOString(),
+      });
+      await AsyncStorage.setItem("recentEvents", JSON.stringify(recent.slice(0, 20)));
+    } catch {}
+  };
+
+  const handleSheetSuccess = async () => {
+    const evt = buildCurrentEvent();
+    await saveToRecent(evt);
+    setIsAdded(true);
   };
 
   const toggleEndDate = () => {
@@ -400,7 +351,7 @@ export default function EventEditorScreen() {
                   >
                     <Ionicons name="checkmark-circle" size={20} color="white" />
                     <Text style={{ color: "white", fontWeight: "600", fontSize: 16 }}>
-                      {Platform.OS === "web" ? ".ics Downloaded" : "Added to Calendar"}
+                      Added to Calendar
                     </Text>
                   </View>
                   <Pressable
@@ -493,6 +444,13 @@ export default function EventEditorScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      {/* Calendar choice sheet (Web only) */}
+      <CalendarAddSheet
+        visible={sheetVisible}
+        onClose={() => setSheetVisible(false)}
+        events={[buildCurrentEvent()]}
+        onSuccess={handleSheetSuccess}
+      />
     </ScreenContainer>
   );
 }
