@@ -96,7 +96,7 @@
 
 ## Optimization - Round 5
 
-- [ ] Fix: Multi-time-slot image (澳門講解會) returns "Untitled Event" with no date/time - AI extraction completely fails
-- [ ] Fix: .ics download on iOS Safari doesn't actually add to calendar - users press checkmark (dismiss) instead of "加至日曆" - replace with Google/Apple Calendar URL scheme
-- [ ] Fix: Remove confusing ".ics Downloaded" button state - replace with clearer UX flow
-- [ ] Fix: Events show "Added to Calendar!" history but never appear in actual calendar
+- [x] Fix: Multi-time-slot image - enhanced AI prompt with multi-language support, explicit Chinese examples (講解會), "never Untitled Event" rule, emoji/decoration handling
+- [x] Fix: Replaced .ics download with Google Calendar URL + Apple Calendar (webcal://) - CalendarAddSheet component with choice
+- [x] Fix: Removed .ics Downloaded button - now shows Google/Apple Calendar choice sheet, then success confirmation
+- [x] Fix: Events now open in Google Calendar or Apple Calendar directly - user confirms in the calendar app itself
