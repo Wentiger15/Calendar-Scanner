@@ -100,3 +100,7 @@
 - [x] Fix: Replaced .ics download with Google Calendar URL + Apple Calendar (webcal://) - CalendarAddSheet component with choice
 - [x] Fix: Removed .ics Downloaded button - now shows Google/Apple Calendar choice sheet, then success confirmation
 - [x] Fix: Events now open in Google Calendar or Apple Calendar directly - user confirms in the calendar app itself
+
+## Optimization - Round 6
+
+- [ ] Fix: Published API server (calendarscan-zxxerbqr.manus.space) running old server code - returns "Untitled Event" for multi-time-slot image while local API returns correct 2 events
