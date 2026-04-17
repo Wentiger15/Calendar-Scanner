@@ -32,7 +32,7 @@ const env = {
   appSlug: "calendar-scanner",
   // S3 URL of the app logo - set this to the URL returned by generate_image when creating custom logo
   // Leave empty to use the default icon from assets/images/icon.png
-  logoUrl: "https://d2xsxph8kpxj0f.cloudfront.net/310519663279033234/ZXXERbqrPGAPPiXbR9YF96/icon-CrgsS2MqMjTvMTjqN23FCy.webp",
+  logoUrl: "https://d36hbw14aib5lz.cloudfront.net/310519663279033234/ZXXERbqrPGAPPiXbR9YF96/calendar-scanner-icon-G5pRZyvomPdC9pepNa8Gbc.png?Expires=1807945049&Signature=IcnF-zV1O4sB8JLV7UYxyjfHzyGeHcc7D0KcaYMy6p0Cwbe1HF--8C4-9vc-FbmYdH8Yo8BNvnDPTRfos2IaP9wCbuVdfeH819XOVVJrp2v9rKcD2wfrJIGMjLJ7rCdkxnSJCdgLvR4gCZuFDepDd9ZlnN6yD~bQLz4nt1PZtOjQWT~PVHZ0LfXNETF3zeR~3hHJBoky42XYLSNDncJfj4SXRpd7Nue0~MJmvVOQgq1TZDkmH~hYxZYhF2AkB1Km1GG5Ps-lwxZIsB28xsXLFfnR8vXGKXN87e30PEc6CpKFkeU7MNgNZEtUmN~JdiWOP2Y07X2wLVsKywC5rZBttQ__&Key-Pair-Id=K1MP89RTKNH4J",
   scheme: schemeFromBundleId,
   iosBundleId: bundleId,
   androidPackage: bundleId,

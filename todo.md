@@ -79,3 +79,5 @@
 - [x] Fix web error: "The string did not match the expected pattern" - Vercel static site had no backend; configured getApiBaseUrl() to use Manus published API server
 - [x] Fix: iPhone photo library image extraction still fails on Vercel web - env var not inlined at build time; moved to module-level env object + injected in vercel.json buildCommand
 - [x] Fix: "Add to Calendar" button does nothing on Web - implemented .ics file download for web platform, keeps expo-calendar for native
+- [x] Generate custom app icon for Calendar Scanner and update all icon locations
+- [x] Ensure web favicon and PWA icon display correctly when added to iPhone home screen - added +html.tsx with apple-touch-icon, apple-mobile-web-app meta tags
