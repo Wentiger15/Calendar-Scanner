@@ -103,7 +103,7 @@
 
 ## Optimization - Round 6
 
-- [ ] Fix: Published API server (calendarscan-zxxerbqr.manus.space) running old server code - returns "Untitled Event" for multi-time-slot image while local API returns correct 2 events
+- [x] Fix: Published API server updated after user Publish - now correctly returns 2 events for multi-time-slot images
 
 ## Optimization - Round 7
 
@@ -111,5 +111,5 @@
 
 ## Optimization - Round 8
 
-- [ ] Feature: Calendar preference memory - save user's calendar choice (Google/Apple) in AsyncStorage, auto-select next time
-- [ ] UI: Convert all English UI text to Chinese across all pages (home, event-preview, event-editor, event-success, calendar-add-sheet)
+- [x] Feature: Calendar preference memory - AsyncStorage saves user choice, auto-selects next time with "更換日曆應用" option
+- [x] UI: Converted all English text to Chinese across all pages (home, event-preview, event-editor, event-success, calendar-add-sheet, tab bar)
